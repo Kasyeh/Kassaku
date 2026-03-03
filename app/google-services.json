@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "277429880739",
+    "project_id": "kassaku-8beb0",
+    "storage_bucket": "kassaku-8beb0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:277429880739:android:aa941bc8d4e986b8277c16",
+        "android_client_info": {
+          "package_name": "com.example.kassaku"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCKxh_ER4z20jgBIEnd3Z96kVDroNeQnfE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
