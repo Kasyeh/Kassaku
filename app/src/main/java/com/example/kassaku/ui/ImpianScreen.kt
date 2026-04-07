@@ -43,6 +43,8 @@ import coil.compose.AsyncImage
 import com.example.kassaku.data.remote.model.ImpianItem
 import com.example.kassaku.ui.theme.*
 import com.example.kassaku.ui.components.LogoutConfirmationDialog
+import com.example.kassaku.ui.components.form.SetorImpianFormSheet
+import com.example.kassaku.ui.components.form.SetorImpianFormState
 import com.example.kassaku.viewmodel.HomeViewModel
 import com.example.kassaku.viewmodel.ImpianUiState
 import com.example.kassaku.viewmodel.TambahImpianResult
@@ -76,7 +78,8 @@ fun ImpianScreen(
     var showLogoutDialog by remember { mutableStateOf(false) }
     var impianToDelete by remember { mutableStateOf<ImpianItem?>(null) }
     var impianToSetor by remember { mutableStateOf<ImpianItem?>(null) }
-    var showSetorDialog by remember { mutableStateOf(false) }
+    var showSetorSheet by remember { mutableStateOf(false) }
+    var setorFormState by remember { mutableStateOf<SetorImpianFormState>(SetorImpianFormState.Idle) }
 
     // Colors
     val backgroundColor = if (isDark) StitchBackgroundDark else StitchBackgroundLight
@@ -133,10 +136,16 @@ fun ImpianScreen(
                     is SetorImpianResult.Success -> {
                         Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
                         homeViewModel.resetSetorImpianResult()
+                        setorFormState = SetorImpianFormState.Success
+                        showSetorSheet = false
+                        impianToSetor = null
                     }
                     is SetorImpianResult.Error -> {
-                        Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
+                        setorFormState = SetorImpianFormState.Error(result.message)
                         homeViewModel.resetSetorImpianResult()
+                    }
+                    is SetorImpianResult.Loading -> {
+                        setorFormState = SetorImpianFormState.Submitting
                     }
                     else -> {}
                 }
@@ -230,7 +239,8 @@ fun ImpianScreen(
                                     },
                                     onSetorClick = {
                                         impianToSetor = item
-                                        showSetorDialog = true
+                                        showSetorSheet = true
+                                        setorFormState = SetorImpianFormState.Idle
                                     },
                                     isDark = isDark,
                                     surfaceColor = surfaceColor
@@ -311,23 +321,23 @@ fun ImpianScreen(
             )
         }
 
-        if (showSetorDialog) {
-            SetorImpianDialog(
-                item = impianToSetor,
-                onDismissRequest = {
-                    showSetorDialog = false
-                    impianToSetor = null
-                },
-                onConfirm = { nominal, keterangan ->
-                    val target = impianToSetor
-                    if (target != null) {
-                        homeViewModel.setorImpian(target.idImpian, userId, nominal, keterangan)
-                    }
-                    showSetorDialog = false
-                    impianToSetor = null
+        SetorImpianFormSheet(
+            isVisible = showSetorSheet,
+            item = impianToSetor,
+            formState = setorFormState,
+            onDismiss = {
+                showSetorSheet = false
+                impianToSetor = null
+                setorFormState = SetorImpianFormState.Idle
+            },
+            onSubmit = { nominal, keterangan ->
+                val target = impianToSetor
+                if (target != null) {
+                    setorFormState = SetorImpianFormState.Submitting
+                    homeViewModel.setorImpian(target.idImpian, userId, nominal, keterangan)
                 }
-            )
-        }
+            }
+        )
         }
     }
 }
@@ -909,83 +919,7 @@ fun createMultipartFromUri(context: Context, uri: Uri, partName: String): okhttp
     }
 }
 
-@Composable
-fun SetorImpianDialog(
-    item: ImpianItem?,
-    onDismissRequest: () -> Unit,
-    onConfirm: (nominal: Long, keterangan: String?) -> Unit
-) {
-    val formatter = NumberFormat.getNumberInstance(Locale("id", "ID")).apply {
-        maximumFractionDigits = 0
-    }
-    var nominalInput by remember { mutableStateOf("") }
-    var keterangan by remember { mutableStateOf("") }
-    var isNominalError by remember { mutableStateOf(false) }
-    val sisaTarget = item?.sisaTarget ?: 0L
-
-    AlertDialog(
-        onDismissRequest = onDismissRequest,
-        title = { Text(text = "Setor Impian", fontWeight = FontWeight.SemiBold) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    text = item?.namaBarang ?: "-",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Sisa target: Rp ${formatter.format(sisaTarget)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                OutlinedTextField(
-                    value = nominalInput,
-                    onValueChange = { value ->
-                        nominalInput = value.filter { it.isDigit() }
-                        isNominalError = false
-                    },
-                    label = { Text("Nominal Setoran") },
-                    prefix = { Text("Rp") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    visualTransformation = ThousandSeparatorVisualTransformation(),
-                    isError = isNominalError,
-                    supportingText = {
-                        if (isNominalError) Text("Nominal tidak valid atau melebihi sisa target")
-                    },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = keterangan,
-                    onValueChange = { keterangan = it },
-                    label = { Text("Keterangan (Opsional)") },
-                    minLines = 2,
-                    maxLines = 4,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val nominal = nominalInput.toLongOrNull() ?: 0L
-                    isNominalError = nominal <= 0L || nominal > sisaTarget
-                    if (!isNominalError) {
-                        onConfirm(nominal, keterangan.takeIf { it.isNotBlank() })
-                    }
-                },
-                enabled = item != null && sisaTarget > 0
-            ) {
-                Text("Simpan")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismissRequest) {
-                Text("Batal")
-            }
-        }
-    )
-}
+// SetorImpianDialog has been replaced by SetorImpianFormSheet in ui/components/form/
 
 @Composable
 fun HapusImpianDialog(

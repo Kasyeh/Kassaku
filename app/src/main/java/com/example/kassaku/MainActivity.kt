@@ -63,6 +63,7 @@ import com.example.kassaku.ui.SplashScreen
 import com.example.kassaku.ui.StatistikScreen
 import com.example.kassaku.ui.theme.KasSakuTheme
 import com.example.kassaku.ui.theme.StitchPrimary
+import com.example.kassaku.utils.ForceLogoutManager
 import com.example.kassaku.utils.ThemeMode
 import com.example.kassaku.utils.ThemePreferences
 import com.example.kassaku.viewmodel.HomeViewModel
@@ -368,6 +369,10 @@ fun MainAppScreen(userId: Int, homeViewModel: HomeViewModel, onLogout: (com.exam
     val context = LocalContext.current
     var lastBackPressTime by remember { androidx.compose.runtime.mutableStateOf(0L) }
 
+    androidx.compose.runtime.LaunchedEffect(userId) {
+        homeViewModel.startSessionMonitoring(userId)
+    }
+
     androidx.activity.compose.BackHandler {
         val currentTime = System.currentTimeMillis()
         if (currentTime - lastBackPressTime < 2000) {
@@ -380,6 +385,14 @@ fun MainAppScreen(userId: Int, homeViewModel: HomeViewModel, onLogout: (com.exam
 
     androidx.compose.runtime.LaunchedEffect(homeViewModel) {
         homeViewModel.logoutNavigationEvent.collectLatest { reason ->
+            homeViewModel.resetRealtimeStateAfterLogout()
+            onLogout(reason)
+        }
+    }
+
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        ForceLogoutManager.events.collectLatest { reason ->
+            homeViewModel.resetRealtimeStateAfterLogout()
             onLogout(reason)
         }
     }
@@ -445,4 +458,3 @@ fun MainAppScreen(userId: Int, homeViewModel: HomeViewModel, onLogout: (com.exam
 }
 
 // Old BottomNavigationBar removed. Using reusable KassakuBottomBar instead.
-

@@ -12,8 +12,12 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 import com.example.kassaku.utils.ThemeMode
+import com.google.gson.JsonParser
+import java.util.concurrent.atomic.AtomicBoolean
 
 enum class LogoutReason {
     MANUAL,
@@ -28,6 +32,11 @@ open class HomeViewModel(
     private val impianRepository: ImpianRepository = ImpianRepository(ApiClient.api),
     private val realtimeDatabaseRepository: com.example.kassaku.data.repository.RealtimeDatabaseRepository = com.example.kassaku.data.repository.RealtimeDatabaseRepository()
 ) : ViewModel() {
+    private var balanceRealtimeJob: Job? = null
+    private var statusRealtimeJob: Job? = null
+    private var accountEventJob: Job? = null
+    private var monitoredUserId: Int? = null
+    private val blockedLogoutTriggered = AtomicBoolean(false)
 
     private val _balanceData = MutableStateFlow<BalanceData?>(null)
     open val balanceData: StateFlow<BalanceData?> = _balanceData.asStateFlow()
@@ -69,6 +78,8 @@ open class HomeViewModel(
     }
 
     open fun loadBalanceData(userId: Int) {
+        startSessionMonitoring(userId)
+
         // Initial load from API
         viewModelScope.launch {
             val result = transactionRepository.getUserBalance(userId)
@@ -83,28 +94,75 @@ open class HomeViewModel(
         }
 
         // Listen for Realtime Updates (Balance)
-        viewModelScope.launch {
-            realtimeDatabaseRepository.getUserBalanceFlow(userId).collect { newSaldo ->
-                newSaldo?.let {
-                    val currentBalance = _balanceData.value
-                    if (currentBalance != null) {
-                        // Update saldo only, keep other fields
-                        _balanceData.value = currentBalance.copy(saldo = it.toLong().toString())
+        if (monitoredUserId != userId) {
+            balanceRealtimeJob?.cancel()
+            monitoredUserId = userId
+        }
+
+        if (balanceRealtimeJob?.isActive != true) {
+            balanceRealtimeJob = viewModelScope.launch {
+                realtimeDatabaseRepository.getUserBalanceFlow(userId).collect { newSaldo ->
+                    newSaldo?.let {
+                        val currentBalance = _balanceData.value
+                        if (currentBalance != null) {
+                            // Update saldo only, keep other fields
+                            _balanceData.value = currentBalance.copy(saldo = it.toLong().toString())
+                        }
                     }
                 }
             }
         }
+    }
 
-        // Listen for Account Status Updates (Auto-Logout if blocked)
-        viewModelScope.launch {
-            realtimeDatabaseRepository.getUserStatusFlow(userId).collect { active ->
-                if (active == 0) {
-                    // Akun diblokir, paksa logout
-                    android.util.Log.w("HomeViewModel", "Account blocked by admin! Forcing logout.")
-                    _logoutNavigationEvent.emit(LogoutReason.BLOCKED)
-                }
+    fun startSessionMonitoring(userId: Int) {
+        if (monitoredUserId != userId) {
+            statusRealtimeJob?.cancel()
+            accountEventJob?.cancel()
+            blockedLogoutTriggered.set(false)
+            monitoredUserId = userId
+        }
+
+        if (statusRealtimeJob?.isActive != true) {
+            statusRealtimeJob = viewModelScope.launch {
+                realtimeDatabaseRepository.getUserStatusFlow(userId)
+                    .filterNotNull()
+                    .collect { active ->
+                        if (active == 0) {
+                            emitBlockedLogout("Account blocked via status listener")
+                        }
+                    }
             }
         }
+
+        if (accountEventJob?.isActive != true) {
+            accountEventJob = viewModelScope.launch {
+                realtimeDatabaseRepository.getAccountEventFlow(userId)
+                    .filterNotNull()
+                    .collect { event ->
+                        if (event.event.equals("blocked", ignoreCase = true)) {
+                            emitBlockedLogout("Account blocked via account_event listener")
+                        }
+                    }
+            }
+        }
+    }
+
+    private suspend fun emitBlockedLogout(logMessage: String) {
+        if (blockedLogoutTriggered.compareAndSet(false, true)) {
+            android.util.Log.w("HomeViewModel", logMessage)
+            _logoutNavigationEvent.emit(LogoutReason.BLOCKED)
+        }
+    }
+
+    fun resetRealtimeStateAfterLogout() {
+        balanceRealtimeJob?.cancel()
+        statusRealtimeJob?.cancel()
+        accountEventJob?.cancel()
+        balanceRealtimeJob = null
+        statusRealtimeJob = null
+        accountEventJob = null
+        monitoredUserId = null
+        blockedLogoutTriggered.set(false)
     }
 
     fun tambahPemasukan(userId: Int, nominal: Long, kategori: String, keterangan: String, tanggal: String? = null) {
@@ -135,15 +193,16 @@ open class HomeViewModel(
         userId: Int,
         periode: String? = null,
         jenis: String? = null,
+        search: String? = null,
         tanggal: String? = null,
         bulan: Int? = null,
         tahun: Int? = null
     ) {
         viewModelScope.launch {
-            android.util.Log.d("HomeViewModel", "fetchRiwayatTransaksi: $userId, $periode, $jenis, $tanggal, $bulan, $tahun")
+            android.util.Log.d("HomeViewModel", "fetchRiwayatTransaksi: $userId, $periode, $jenis, $search, $tanggal, $bulan, $tahun")
             _riwayatUiState.value = RiwayatUiState.Loading
             val result = transactionRepository.getRiwayatTransaksi(
-                userId, periode, jenis, tanggal, bulan, tahun
+                userId, periode, jenis, search, tanggal, bulan, tahun
             )
             result.fold(
                 onSuccess = { items ->
@@ -267,6 +326,8 @@ open class HomeViewModel(
     fun exportPdf(
         userId: Int,
         periode: String? = null,
+        jenis: String? = null,
+        search: String? = null,
         tanggal: String? = null,
         bulan: Int? = null,
         tahun: Int? = null
@@ -274,16 +335,26 @@ open class HomeViewModel(
         viewModelScope.launch {
             _exportPdfResult.value = ExportPdfResult.Loading
             try {
-                val response = ApiClient.api.exportPdf(userId, periode, tanggal, bulan, tahun)
+                val response = ApiClient.api.exportMyPdf(periode, jenis, search, tanggal, bulan, tahun)
                 if (response.isSuccessful && response.body() != null) {
                     _exportPdfResult.value = ExportPdfResult.Success(response.body()!!)
                 } else {
-                    _exportPdfResult.value = ExportPdfResult.Error("Gagal mengunduh PDF: ${response.message()}")
+                    val parsedMessage = parseApiErrorMessage(response.errorBody()?.string().orEmpty())
+                    _exportPdfResult.value = ExportPdfResult.Error(parsedMessage ?: "Gagal mengunduh PDF: ${response.message()}")
                 }
             } catch (e: Exception) {
                 android.util.Log.e("HomeViewModel", "Error exporting PDF: ${e.message}", e)
                 _exportPdfResult.value = ExportPdfResult.Error(e.message ?: "Gagal mengunduh PDF")
             }
+        }
+    }
+
+    private fun parseApiErrorMessage(raw: String): String? {
+        return try {
+            if (raw.isBlank()) return null
+            JsonParser.parseString(raw).asJsonObject.get("message")?.asString
+        } catch (_: Exception) {
+            null
         }
     }
 
@@ -298,10 +369,16 @@ open class HomeViewModel(
             _riwayatUiState.value = RiwayatUiState.Idle
             _impianUiState.value = ImpianUiState.Idle
             _statistikData.value = null
+            resetRealtimeStateAfterLogout()
             
             // Trigger navigasi logout
             _logoutNavigationEvent.emit(LogoutReason.MANUAL)
         }
+    }
+
+    override fun onCleared() {
+        resetRealtimeStateAfterLogout()
+        super.onCleared()
     }
 
     fun fetchStatistik(userId: Int) {
@@ -345,7 +422,7 @@ open class HomeViewModel(
         viewModelScope.launch {
             _resetSaldoResult.value = ResetSaldoResult.Loading
             try {
-                val response = ApiClient.api.resetSaldo(userId, password)
+                val response = ApiClient.api.resetSaldo(password)
                 if (response.isSuccessful && response.body()?.success == true) {
                     _resetSaldoResult.value = ResetSaldoResult.Success(
                         response.body()?.message ?: "Saldo berhasil direset"
@@ -412,4 +489,3 @@ open class HomeViewModel(
         _budgetActionResult.value = BudgetActionResult.Idle
     }
 }
-

@@ -30,7 +30,7 @@ class TransactionRepository(private val apiService: ApiService) {
      */
     suspend fun getUserBalance(userId: Int): Result<BalanceData> {
         return try {
-            val response: Response<BalanceResponse> = apiService.getUserBalance(userId)
+            val response: Response<BalanceResponse> = apiService.getMyBalance()
             
             if (response.isSuccessful) {
                 val balanceData = response.body()?.data
@@ -55,6 +55,7 @@ class TransactionRepository(private val apiService: ApiService) {
         userId: Int, 
         periode: String? = null,
         jenis: String? = null,
+        search: String? = null,
         tanggal: String? = null,
         bulan: Int? = null,
         tahun: Int? = null,
@@ -62,8 +63,8 @@ class TransactionRepository(private val apiService: ApiService) {
     ): Result<List<RiwayatItem>> {
         return try {
             // Coba dengan response pagination dulu
-            val response: Response<RiwayatResponse> = apiService.getRiwayatTransaksi(
-                userId, periode, jenis, tanggal, bulan, tahun, page
+            val response: Response<RiwayatResponse> = apiService.getMyRiwayatTransaksi(
+                periode, jenis, search, tanggal, bulan, tahun, page
             )
             
             if (response.isSuccessful) {
@@ -75,10 +76,10 @@ class TransactionRepository(private val apiService: ApiService) {
                     body.dataPage.riwayatItems
                 } else {
                     // Fallback: coba parsing sebagai array langsung
-                    android.util.Log.d("TransactionRepo", "DataPage null, trying direct response...")
-                    try {
-                        val directResponse = apiService.getRiwayatTransaksiDirect(
-                            userId, periode, jenis, tanggal, bulan, tahun, page
+                        android.util.Log.d("TransactionRepo", "DataPage null, trying direct response...")
+                        try {
+                            val directResponse = apiService.getMyRiwayatTransaksiDirect(
+                            periode, jenis, search, tanggal, bulan, tahun, page
                         )
                         directResponse.body()?.riwayatItems ?: emptyList()
                     } catch (e: Exception) {
@@ -110,7 +111,7 @@ class TransactionRepository(private val apiService: ApiService) {
         tanggal: String?
     ): Flow<PemasukanResult> = flow {
         try {
-            val response = apiService.tambahPemasukan(userId, nominal, kategori, keterangan, tanggal)
+            val response = apiService.tambahPemasukan(nominal, kategori, keterangan, tanggal)
             if (response.success) {
                 emit(PemasukanResult.Success(response.message))
             } else {
@@ -129,7 +130,7 @@ class TransactionRepository(private val apiService: ApiService) {
         tanggal: String?
     ): Flow<PengeluaranResult> = flow {
         try {
-            val response = apiService.tambahPengeluaran(userId, nominal, kategori, keterangan, tanggal)
+            val response = apiService.tambahPengeluaran(nominal, kategori, keterangan, tanggal)
             if (response.success) {
                 emit(PengeluaranResult.Success(response.message))
             } else {
@@ -145,7 +146,7 @@ class TransactionRepository(private val apiService: ApiService) {
         target: Long
     ): Flow<TargetPengeluaranResult> = flow {
         try {
-            val response = apiService.simpanTargetPengeluaran(userId, target)
+            val response = apiService.simpanTargetPengeluaran(target)
             if (response.isSuccessful && response.body() != null) {
                 val body = response.body()!!
                 emit(TargetPengeluaranResult.Success(
@@ -164,7 +165,7 @@ class TransactionRepository(private val apiService: ApiService) {
 
     suspend fun getStatistik(userId: Int): Result<com.example.kassaku.data.remote.model.StatistikData> {
         return try {
-            val response = apiService.getStatistik(userId)
+            val response = apiService.getMyStatistik()
             if (response.isSuccessful) {
                 val data = response.body()?.data
                 if (data != null) {
@@ -182,7 +183,7 @@ class TransactionRepository(private val apiService: ApiService) {
 
     suspend fun getBudgetKategori(userId: Int): Result<List<BudgetKategoriItem>> {
         return try {
-            val response = apiService.getBudgetKategori(userId)
+            val response = apiService.getMyBudgetKategori()
             if (response.isSuccessful) {
                 Result.success(response.body()?.data ?: emptyList())
             } else {
@@ -202,7 +203,7 @@ class TransactionRepository(private val apiService: ApiService) {
         tanggalAkhir: String? = null
     ): Flow<BudgetActionResult> = flow {
         try {
-            val response = apiService.simpanBudgetKategori(userId, kategori, nominal, periode, tanggalMulai, tanggalAkhir)
+            val response = apiService.simpanBudgetKategori(kategori, nominal, periode, tanggalMulai, tanggalAkhir)
             if (response.isSuccessful && response.body()?.success == true) {
                 emit(BudgetActionResult.Success(response.body()?.message ?: "Budget disimpan"))
             } else {
@@ -219,7 +220,7 @@ class TransactionRepository(private val apiService: ApiService) {
         password: String
     ): Flow<BudgetActionResult> = flow {
         try {
-            val response = apiService.hapusBudgetKategori(budgetId, userId, password)
+            val response = apiService.hapusBudgetKategori(budgetId, password)
             if (response.isSuccessful && response.body()?.success == true) {
                 emit(BudgetActionResult.Success(response.body()?.message ?: "Budget dihapus"))
             } else {

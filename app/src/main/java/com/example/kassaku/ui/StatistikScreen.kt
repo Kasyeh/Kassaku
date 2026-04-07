@@ -54,8 +54,14 @@ import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.filled.TrendingDown
+import androidx.compose.material.icons.filled.TrendingFlat
+import androidx.compose.material.icons.filled.WorkspacePremium
+import androidx.compose.material.icons.filled.WarningAmber
 import com.example.kassaku.data.remote.model.BudgetKategoriItem
+import com.example.kassaku.data.remote.model.CashflowPeriodData
 import com.example.kassaku.data.remote.model.MotivasiItem
+import com.example.kassaku.data.remote.model.StatistikData
 import com.example.kassaku.viewmodel.BudgetActionResult
 import java.util.Locale
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -72,6 +78,96 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.ui.Modifier
 
+private enum class CashflowChartUiState {
+    Loading,
+    Empty,
+    Sparse,
+    Ready
+}
+
+private data class CashflowResolvedData(
+    val periodKey: String,
+    val periodLabel: String,
+    val series: CashflowPeriodData,
+    val uiState: CashflowChartUiState,
+    val selectedIndex: Int
+)
+
+private val periodOrder = listOf("7d", "30d", "3m", "12m")
+
+private val periodLabelMap = mapOf(
+    "7d" to "7 Hari",
+    "30d" to "30 Hari",
+    "3m" to "3 Bulan",
+    "12m" to "12 Bulan"
+)
+
+private fun resolveCashflowPeriodData(
+    data: StatistikData,
+    periodKey: String
+): CashflowPeriodData {
+    data.cashflowSeries?.get(periodKey)?.let { series ->
+        if (series.labels.isNotEmpty()) {
+            return series
+        }
+    }
+
+    val fallbackIncome = data.pemasukan
+    val fallbackExpense = data.pengeluaran
+    val fallbackNet = if (data.net.isNotEmpty()) {
+        data.net
+    } else {
+        fallbackIncome.zip(fallbackExpense) { income, expense -> income - expense }
+    }
+
+    return CashflowPeriodData(
+        labels = data.labels,
+        income = fallbackIncome,
+        expense = fallbackExpense,
+        net = fallbackNet,
+        totalIncome = fallbackIncome.sum(),
+        totalExpense = fallbackExpense.sum(),
+        totalNet = fallbackNet.sum(),
+        changePct = 0.0,
+        maxExpenseLabel = data.labels.getOrNull(
+            fallbackExpense.indices.maxByOrNull { fallbackExpense[it] } ?: -1
+        ),
+        maxExpenseValue = fallbackExpense.maxOrNull() ?: 0.0
+    )
+}
+
+private fun resolveCashflowUiState(series: CashflowPeriodData): CashflowChartUiState {
+    if (series.labels.isEmpty()) {
+        return CashflowChartUiState.Empty
+    }
+
+    val nonZeroPoints = series.income.indices.count { index ->
+        (series.income.getOrElse(index) { 0.0 } != 0.0) ||
+            (series.expense.getOrElse(index) { 0.0 } != 0.0) ||
+            (series.net.getOrElse(index) { 0.0 } != 0.0)
+    }
+
+    return when {
+        nonZeroPoints == 0 -> CashflowChartUiState.Empty
+        nonZeroPoints == 1 -> CashflowChartUiState.Sparse
+        else -> CashflowChartUiState.Ready
+    }
+}
+
+private fun isDailyCashflowPeriod(periodKey: String): Boolean = periodKey == "7d" || periodKey == "30d"
+
+private fun safeSelectedIndex(labels: List<String>, currentIndex: Int): Int {
+    if (labels.isEmpty()) {
+        return -1
+    }
+    return currentIndex.coerceIn(0, labels.lastIndex)
+}
+
+private fun formatSignedPercent(value: Double): String {
+    val sign = if (value > 0) "+" else ""
+    return "$sign${String.format(Locale.US, "%.1f", value)}%"
+}
+
 @Composable
 fun StatistikScreen(
     userId: Int,
@@ -84,15 +180,14 @@ fun StatistikScreen(
     val backgroundColor = if (isDark) iOSBackgroundDark else iOSBackgroundLight
     val textPrimary = if (isDark) iOSLabelDark else iOSLabelLight
 
-
     val statistikData by homeViewModel.statistikData.collectAsStateWithLifecycle()
-    val balanceData by homeViewModel.balanceData.collectAsStateWithLifecycle()
     val impianUiState by homeViewModel.impianUiState.collectAsStateWithLifecycle()
     val budgetActionResult by homeViewModel.budgetActionResult.collectAsStateWithLifecycle()
 
     var showBudgetDialog by remember { mutableStateOf(false) }
     var showHapusBudgetDialog by remember { mutableStateOf(false) }
     var budgetIdToDelete by remember { mutableStateOf<Int?>(null) }
+    var selectedCashflowPeriod by remember { mutableStateOf("30d") }
 
     LaunchedEffect(budgetActionResult) {
         if (budgetActionResult is BudgetActionResult.Success) {
@@ -106,6 +201,17 @@ fun StatistikScreen(
             homeViewModel.fetchStatistik(userId)
             homeViewModel.loadBalanceData(userId)
             homeViewModel.fetchImpian(userId)
+        }
+    }
+
+    LaunchedEffect(statistikData) {
+        val defaultPeriod = statistikData?.defaultCashflowPeriod
+        val availableSeries = statistikData?.cashflowSeries.orEmpty()
+        selectedCashflowPeriod = when {
+            !defaultPeriod.isNullOrBlank() && availableSeries.containsKey(defaultPeriod) -> defaultPeriod
+            availableSeries.containsKey("30d") -> "30d"
+            availableSeries.isNotEmpty() -> availableSeries.keys.first()
+            else -> "30d"
         }
     }
 
@@ -123,7 +229,7 @@ fun StatistikScreen(
                     .padding(horizontal = 24.dp)
                     .statusBarsPadding()
             ) {
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -147,7 +253,7 @@ fun StatistikScreen(
                 }
             }
             
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Content
             LazyColumn(
@@ -156,20 +262,13 @@ fun StatistikScreen(
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
             item {
-                Text(
-                    text = "Analisis Arus Kas",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = textPrimary
-                )
-            }
-
-            item {
                 val data = statistikData
                 if (data != null) {
                     CashflowChartsSection(
                         data = data,
-                        isDark = isDark
+                        isDark = isDark,
+                        selectedPeriod = selectedCashflowPeriod,
+                        onPeriodChange = { selectedCashflowPeriod = it }
                     )
                 } else {
                     SkeletonChartView(
@@ -184,6 +283,7 @@ fun StatistikScreen(
                 if (data != null) {
                     FinancialInsightsSection(
                         data = data,
+                        selectedPeriod = selectedCashflowPeriod,
                         isDark = isDark
                     )
                 }
@@ -232,6 +332,7 @@ fun StatistikScreen(
                 if (data != null) {
                     ProgressComparisonSection(
                         data = data,
+                        selectedPeriod = selectedCashflowPeriod,
                         isDark = isDark
                     )
                 }
@@ -549,12 +650,14 @@ fun formatCurrency(amount: Double): String {
 
 @Composable
 fun FinancialInsightsSection(
-    data: com.example.kassaku.data.remote.model.StatistikData,
+    data: StatistikData,
+    selectedPeriod: String,
     isDark: Boolean
 ) {
-    val labels = data.labels
-    val pemasukan = data.pemasukan
-    val pengeluaran = data.pengeluaran
+    val series = remember(data, selectedPeriod) { resolveCashflowPeriodData(data, selectedPeriod) }
+    val labels = series.labels
+    val pemasukan = series.income
+    val pengeluaran = series.expense
     
     // Calculations
     val nets = pemasukan.zip(pengeluaran) { inc, exp -> inc - exp }
@@ -565,6 +668,7 @@ fun FinancialInsightsSection(
     
     val mostWastefulIndex = if (hasEnoughData) pengeluaran.indices.maxByOrNull { pengeluaran[it] } ?: -1 else -1
     val mostProductiveIndex = if (hasEnoughData) nets.indices.maxByOrNull { nets[it] } ?: -1 else -1
+    val unitLabel = if (isDailyCashflowPeriod(selectedPeriod)) "Hari" else "Bulan"
     
     val trend = if (nets.size >= 2) {
         val last = nets.last()
@@ -588,15 +692,15 @@ fun FinancialInsightsSection(
         InsightCard(
             title = "Rata-rata Tabungan",
             value = formatCurrency(avgSavings),
-            icon = Icons.Default.PieChart,
+            icon = Icons.Default.Payments,
             color = StitchPrimary,
             isDark = isDark,
             modifier = Modifier.weight(1f)
         )
         InsightCard(
-            title = "Bulan Terhemat",
+            title = "$unitLabel Terhemat",
             value = if (mostProductiveIndex != -1) labels[mostProductiveIndex] else "-",
-            icon = Icons.Default.PieChart, // Should be something else but let's stick to simple ones first
+            icon = Icons.Default.WorkspacePremium,
             color = Color(0xFF34C759),
             isDark = isDark,
             modifier = Modifier.weight(1f)
@@ -610,17 +714,21 @@ fun FinancialInsightsSection(
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         InsightCard(
-            title = "Bulan Terboros",
+            title = "$unitLabel Terboros",
             value = if (mostWastefulIndex != -1) labels[mostWastefulIndex] else "-",
-            icon = Icons.Default.PieChart,
+            icon = Icons.Default.WarningAmber,
             color = StitchAccentRed,
             isDark = isDark,
             modifier = Modifier.weight(1f)
         )
         InsightCard(
-            title = "Tren 6 Bulan",
+            title = "Tren ${periodLabelMap[selectedPeriod] ?: selectedPeriod}",
             value = trend,
-            icon = Icons.Default.PieChart,
+            icon = when (trend) {
+                "Meningkat" -> Icons.Default.TrendingUp
+                "Menurun" -> Icons.Default.TrendingDown
+                else -> Icons.Default.TrendingFlat
+            },
             color = if (trend == "Meningkat") StitchPrimary else if (trend == "Menurun") StitchAccentRed else Color.Gray,
             isDark = isDark,
             modifier = Modifier.weight(1f)
@@ -664,82 +772,149 @@ fun InsightCard(
 
 @Composable
 fun ProgressComparisonSection(
-    data: com.example.kassaku.data.remote.model.StatistikData,
+    data: StatistikData,
+    selectedPeriod: String,
     isDark: Boolean
 ) {
-    val currentInc = data.pemasukan.lastOrNull() ?: 0.0
-    val currentExp = data.pengeluaran.lastOrNull() ?: 0.0
-    val prevInc = if (data.pemasukan.size >= 2) data.pemasukan[data.pemasukan.size - 2] else 0.0
-    
-    val progress = if (currentInc > 0) (currentExp / currentInc).toFloat().coerceIn(0f, 1f) else 0f
-    
+    val series = remember(data, selectedPeriod) { resolveCashflowPeriodData(data, selectedPeriod) }
+    val monthlyPemasukan = series.income.lastOrNull() ?: 0.0
+    val monthlyPengeluaran = series.expense.lastOrNull() ?: 0.0
+    val prevMonthPemasukan = if (series.income.size >= 2) series.income[series.income.size - 2] else 0.0
+    val prevMonthPengeluaran = if (series.expense.size >= 2) series.expense[series.expense.size - 2] else 0.0
+
+    val incDiff = monthlyPemasukan - prevMonthPemasukan
+    val expDiff = monthlyPengeluaran - prevMonthPengeluaran
+
+    // Determine trend for motivational text
+    val nets = series.income.zip(series.expense) { inc, exp -> inc - exp }
+    val trend = if (nets.size >= 2) {
+        val last = nets.last()
+        val prev = nets[nets.size - 2]
+        if (last > prev) "Meningkat" else if (last < prev) "Menurun" else "Stabil"
+    } else "Stabil"
+    val periodLabel = periodLabelMap[selectedPeriod] ?: selectedPeriod
+
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(32.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isDark) iOSSecondaryBackgroundDark else Color.White
+            containerColor = if (isDark) Color(0xFF1C1C1E) else Color(0xFF1E1E2D)
         ),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
+        Column(modifier = Modifier.padding(24.dp)) {
+            // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Rasio Pengeluaran",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isDark) Color.White else Color.Black
+                    text = "Progress $periodLabel",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Black,
+                    color = Color.White.copy(alpha = 0.5f),
+                    letterSpacing = 1.5.sp
                 )
-                Text(
-                    text = "${(progress * 100).toInt()}%",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = if (progress > 0.8f) StitchAccentRed else StitchPrimary
+                Icon(
+                    imageVector = Icons.Default.TrendingUp,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.3f),
+                    modifier = Modifier.size(22.dp)
                 )
             }
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(CircleShape),
-                color = if (progress > 0.8f) StitchAccentRed else StitchPrimary,
-                trackColor = if (isDark) Color(0xFF3A3A3C) else Color(0xFFE5E5EA),
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Pemasukan vs Lalu
+            PerformaBarItem(
+                label = "Pemasukan vs Lalu",
+                diff = incDiff,
+                progress = if (prevMonthPemasukan > 0) (monthlyPemasukan / prevMonthPemasukan).toFloat().coerceIn(0f, 1f) else 1f,
+                barColor = StitchPrimary,
+                isDiffPositiveGood = true
             )
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                ComparisonItem(
-                    label = "Bulan ini vs Lalu",
-                    current = currentInc,
-                    previous = prevInc
-                )
-            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Pengeluaran vs Lalu
+            PerformaBarItem(
+                label = "Pengeluaran vs Lalu",
+                diff = expDiff,
+                progress = if (prevMonthPengeluaran > 0) (monthlyPengeluaran / prevMonthPengeluaran).toFloat().coerceIn(0f, 1f) else 1f,
+                barColor = StitchAccentRed,
+                isDiffPositiveGood = false
+            )
+
+            // Motivational text
+            Spacer(modifier = Modifier.height(28.dp))
+
+            HorizontalDivider(
+                thickness = 0.5.dp,
+                color = Color.White.copy(alpha = 0.06f)
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Text(
+                text = "\"${if (trend == "Meningkat") "Performa keuangan pada $periodLabel membaik dibanding periode sebelumnya." else if (trend == "Menurun") "Waspadai pengeluaran pada $periodLabel agar arus kas kembali sehat." else "Performa keuangan pada $periodLabel cenderung stabil."}\"",
+                fontSize = 10.sp,
+                fontStyle = FontStyle.Italic,
+                color = Color.White.copy(alpha = 0.35f),
+                textAlign = TextAlign.Center,
+                lineHeight = 16.sp,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }
 
 @Composable
-fun ComparisonItem(label: String, current: Double, previous: Double) {
-    val diff = current - previous
-    val percent = if (previous > 0) (diff / previous * 100) else 0.0
-    val color = if (diff >= 0) StitchPrimary else StitchAccentRed
-    val icon = if (diff >= 0) "↑" else "↓"
-    
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(text = label, fontSize = 12.sp, color = iOSSecondaryLabelLight)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(text = "$icon ${String.format("%.1f", Math.abs(percent))}%", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = color)
+private fun PerformaBarItem(
+    label: String,
+    diff: Double,
+    progress: Float,
+    barColor: Color,
+    isDiffPositiveGood: Boolean
+) {
+    val isPositive = diff >= 0
+    val diffColor = if (isDiffPositiveGood) {
+        if (isPositive) Color(0xFF34D399) else Color(0xFFF87171)
+    } else {
+        if (isPositive) Color(0xFFF87171) else Color(0xFF34D399)
+    }
+    val arrow = if (isPositive) "↑" else "↓"
+    val formattedDiff = String.format(Locale.US, "%,.0f", Math.abs(diff)).replace(',', '.')
+
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = label,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White.copy(alpha = 0.5f)
+            )
+            Text(
+                text = "$arrow $formattedDiff",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Black,
+                color = diffColor
+            )
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .clip(CircleShape),
+            color = barColor,
+            trackColor = Color.White.copy(alpha = 0.05f),
+        )
     }
 }
 
@@ -1517,100 +1692,285 @@ fun MotivationSlide(item: MotivasiItem, isDark: Boolean) {
 
 @Composable
 fun CashflowChartsSection(
-    data: com.example.kassaku.data.remote.model.StatistikData,
+    data: StatistikData,
+    selectedPeriod: String,
+    onPeriodChange: (String) -> Unit,
     isDark: Boolean
 ) {
-    val periodOrder = listOf("7d", "30d", "3m", "12m")
-    val periodLabel = mapOf(
-        "7d" to "7 Hari",
-        "30d" to "30 Hari",
-        "3m" to "3 Bulan",
-        "12m" to "12 Bulan"
+    val resolvedSeries = remember(data, selectedPeriod) {
+        resolveCashflowPeriodData(data, selectedPeriod)
+    }
+    val periodLabel = periodLabelMap[selectedPeriod] ?: selectedPeriod
+    val uiState = remember(resolvedSeries) { resolveCashflowUiState(resolvedSeries) }
+    var selectedIndex by remember(selectedPeriod, resolvedSeries.labels) {
+        mutableStateOf(if (resolvedSeries.labels.isEmpty()) -1 else resolvedSeries.labels.lastIndex)
+    }
+    val safeIndex = safeSelectedIndex(resolvedSeries.labels, selectedIndex)
+
+    val resolvedData = CashflowResolvedData(
+        periodKey = selectedPeriod,
+        periodLabel = periodLabel,
+        series = resolvedSeries,
+        uiState = uiState,
+        selectedIndex = safeIndex
     )
 
-    val availableSeries = data.cashflowSeries ?: emptyMap()
-    val defaultPeriod = if (!data.defaultCashflowPeriod.isNullOrBlank()) data.defaultCashflowPeriod else "30d"
-    var selectedPeriod by remember(data, defaultPeriod) {
-        mutableStateOf(
-            when {
-                availableSeries.containsKey(defaultPeriod) -> defaultPeriod!!
-                availableSeries.containsKey("30d") -> "30d"
-                availableSeries.isNotEmpty() -> availableSeries.keys.first()
-                else -> "30d"
-            }
-        )
-    }
-
-    val currentSeries = availableSeries[selectedPeriod]
-    val labels = currentSeries?.labels ?: data.labels
-    val income = currentSeries?.income ?: data.pemasukan
-    val expense = currentSeries?.expense ?: data.pengeluaran
-    val net = currentSeries?.net ?: if (data.net.isNotEmpty()) data.net else income.zip(expense) { i, e -> i - e }
-
     Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = "Grafik Arus Kas",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = if (isDark) Color.White else iOSLabelLight
-        )
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                text = "Analisis Arus Kas",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = if (isDark) Color.White else iOSLabelLight
+            )
+            Text(
+                text = "Pantau pemasukan, pengeluaran, dan net cashflow pada periode yang paling relevan.",
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+                color = if (isDark) iOSSecondaryLabelDark else iOSSecondaryLabelLight
+            )
+        }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             periodOrder.forEach { key ->
-                val selected = key == selectedPeriod
                 FilterChip(
-                    selected = selected,
-                    onClick = { selectedPeriod = key },
+                    selected = key == selectedPeriod,
+                    onClick = {
+                        onPeriodChange(key)
+                        selectedIndex = if (resolvedSeries.labels.isEmpty()) -1 else resolvedSeries.labels.lastIndex
+                    },
                     label = {
                         Text(
-                            text = periodLabel[key] ?: key,
+                            text = periodLabelMap[key] ?: key,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
                     },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = StitchPrimary,
-                        selectedLabelColor = Color.White
+                        selectedLabelColor = Color.White,
+                        containerColor = if (isDark) iOSSecondaryBackgroundDark else Color.White,
+                        labelColor = if (isDark) Color.White else iOSLabelLight
                     )
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        CashflowSummaryCards(
+            series = resolvedData.series,
+            periodLabel = resolvedData.periodLabel,
+            isDark = isDark
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (resolvedData.uiState == CashflowChartUiState.Empty) {
+            CashflowEmptyStateCard(
+                title = "Belum ada aktivitas pada periode ini",
+                description = "Tambahkan pemasukan atau pengeluaran agar pola arus kas mulai terlihat.",
+                isDark = isDark
+            )
+        } else {
+            CashflowTrendChart(
+                labels = resolvedData.series.labels,
+                income = resolvedData.series.income,
+                expense = resolvedData.series.expense,
+                net = resolvedData.series.net,
+                selectedIndex = resolvedData.selectedIndex,
+                onSelectedIndexChange = { selectedIndex = it },
+                isDark = isDark
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            NetBarChart(
+                labels = resolvedData.series.labels,
+                net = resolvedData.series.net,
+                selectedIndex = resolvedData.selectedIndex,
+                onSelectedIndexChange = { selectedIndex = it },
+                isDark = isDark
+            )
+
+            if (resolvedData.uiState == CashflowChartUiState.Sparse) {
+                Spacer(modifier = Modifier.height(12.dp))
+                AssistChip(
+                    onClick = {},
+                    enabled = false,
+                    label = {
+                        Text(
+                            text = "Data masih terbatas. Insight akan semakin akurat setelah transaksi bertambah.",
+                            fontSize = 11.sp
+                        )
+                    }
                 )
             }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        CashflowTrendChart(
-            labels = labels,
-            income = income,
-            expense = expense,
-            net = net,
-            isDark = isDark
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        NetBarChart(
-            labels = labels,
-            net = net,
-            isDark = isDark
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
         CashflowInsightCard(
-            periodKey = selectedPeriod,
-            periodLabel = periodLabel[selectedPeriod] ?: selectedPeriod,
-            labels = labels,
-            income = income,
-            expense = expense,
-            net = net,
-            series = currentSeries,
+            resolved = resolvedData,
             isDark = isDark
         )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "Grafik atas menampilkan tren masuk dan keluar. Grafik bawah menyorot net arus kas tiap titik periode.",
+            fontSize = 11.sp,
+            lineHeight = 16.sp,
+            color = if (isDark) iOSSecondaryLabelDark else iOSSecondaryLabelLight
+        )
+    }
+}
+
+@Composable
+private fun CashflowSummaryCards(
+    series: CashflowPeriodData,
+    periodLabel: String,
+    isDark: Boolean
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            text = "Ringkasan $periodLabel",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Black,
+            color = if (isDark) iOSSecondaryLabelDark else iOSSecondaryLabelLight,
+            letterSpacing = 1.sp
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            SummaryMetricCard(
+                title = "Total Pemasukan",
+                subtitle = "Akumulasi periode aktif",
+                value = formatCurrency(series.totalIncome),
+                toneColor = StitchPrimary,
+                isDark = isDark,
+                modifier = Modifier.weight(1f)
+            )
+            SummaryMetricCard(
+                title = "Total Pengeluaran",
+                subtitle = "Pengeluaran periode aktif",
+                value = formatCurrency(series.totalExpense),
+                toneColor = StitchAccentRed,
+                isDark = isDark,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        SummaryMetricCard(
+            title = "Net Cashflow",
+            subtitle = "Selisih masuk vs keluar",
+            value = formatCurrency(series.totalNet),
+            toneColor = when {
+                series.totalNet > 0 -> StitchPrimary
+                series.totalNet < 0 -> StitchAccentRed
+                else -> if (isDark) Color(0xFFCBD5E1) else Color(0xFF64748B)
+            },
+            isDark = isDark,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
+@Composable
+private fun SummaryMetricCard(
+    title: String,
+    subtitle: String,
+    value: String,
+    toneColor: Color,
+    isDark: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isDark) iOSGroupedBackgroundDark else Color.White
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = title.uppercase(Locale.getDefault()),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 1.sp,
+                color = if (isDark) iOSSecondaryLabelDark else iOSSecondaryLabelLight
+            )
+            Text(
+                text = value,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = toneColor
+            )
+            Text(
+                text = subtitle,
+                fontSize = 11.sp,
+                lineHeight = 15.sp,
+                color = if (isDark) iOSSecondaryLabelDark else iOSSecondaryLabelLight
+            )
+        }
+    }
+}
+
+@Composable
+private fun CashflowEmptyStateCard(
+    title: String,
+    description: String,
+    isDark: Boolean
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(220.dp),
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isDark) iOSGroupedBackgroundDark else Color.White
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.PieChart,
+                contentDescription = null,
+                tint = StitchPrimary.copy(alpha = 0.7f),
+                modifier = Modifier.size(34.dp)
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = title,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isDark) Color.White else iOSLabelLight,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = description,
+                fontSize = 12.sp,
+                lineHeight = 18.sp,
+                color = if (isDark) iOSSecondaryLabelDark else iOSSecondaryLabelLight,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 
@@ -1620,6 +1980,8 @@ fun CashflowTrendChart(
     income: List<Double>,
     expense: List<Double>,
     net: List<Double>,
+    selectedIndex: Int,
+    onSelectedIndexChange: (Int) -> Unit,
     isDark: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -1636,101 +1998,160 @@ fun CashflowTrendChart(
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                ChartLegendItem(label = "Masuk", color = StitchPrimary)
-                ChartLegendItem(label = "Keluar", color = StitchAccentRed)
-                ChartLegendItem(label = "Net", color = Color(0xFF334155))
+                Text(
+                    text = "Tren Pemasukan dan Pengeluaran",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isDark) Color.White else iOSLabelLight
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    ChartLegendItem(label = "Masuk", color = StitchPrimary)
+                    ChartLegendItem(label = "Keluar", color = StitchAccentRed)
+                    ChartLegendItem(label = "Net", color = Color(0xFF334155))
+                }
             }
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            Canvas(
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(bottom = 26.dp)
+                    .pointerInput(labels, selectedIndex) {
+                        detectTapGestures { offset ->
+                            onSelectedIndexChange(calculateSelectedIndex(offset.x, size.width.toFloat(), labels.size))
+                        }
+                    }
             ) {
-                if (labels.isEmpty()) return@Canvas
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    if (labels.isEmpty()) return@Canvas
 
-                val allValues = (income + expense + net + listOf(0.0))
-                val maxValue = allValues.maxOrNull() ?: 1.0
-                val minValue = allValues.minOrNull() ?: 0.0
-                val range = (maxValue - minValue).coerceAtLeast(1.0)
+                    val allValues = (income + expense + net + listOf(0.0))
+                    val maxValue = allValues.maxOrNull() ?: 1.0
+                    val minValue = allValues.minOrNull() ?: 0.0
+                    val range = (maxValue - minValue).coerceAtLeast(1.0)
 
-                fun yOf(value: Double): Float {
-                    val pct = (value - minValue) / range
-                    return (size.height - (pct * size.height)).toFloat()
-                }
-
-                val spacing = size.width / (labels.size - 1).coerceAtLeast(1)
-
-                for (i in 0..4) {
-                    val y = i * (size.height / 4f)
-                    drawLine(
-                        color = textSecondary.copy(alpha = 0.12f),
-                        start = androidx.compose.ui.geometry.Offset(0f, y),
-                        end = androidx.compose.ui.geometry.Offset(size.width, y),
-                        strokeWidth = 1.dp.toPx()
-                    )
-                }
-
-                if (minValue <= 0.0 && maxValue >= 0.0) {
-                    val zeroY = yOf(0.0)
-                    drawLine(
-                        color = Color(0xFF334155).copy(alpha = 0.35f),
-                        start = androidx.compose.ui.geometry.Offset(0f, zeroY),
-                        end = androidx.compose.ui.geometry.Offset(size.width, zeroY),
-                        strokeWidth = 1.dp.toPx(),
-                        pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(8f, 8f))
-                    )
-                }
-
-                fun drawSeries(values: List<Double>, color: Color, dashed: Boolean = false) {
-                    if (values.size < 2) return
-                    val path = androidx.compose.ui.graphics.Path()
-                    val points = values.mapIndexed { idx, v ->
-                        androidx.compose.ui.geometry.Offset(idx * spacing, yOf(v))
+                    fun yOf(value: Double): Float {
+                        val pct = (value - minValue) / range
+                        return (size.height - (pct * size.height)).toFloat()
                     }
 
-                    path.moveTo(points.first().x, points.first().y)
-                    for (i in 0 until points.size - 1) {
-                        val p0 = points[i]
-                        val p1 = points[i + 1]
-                        val c1 = androidx.compose.ui.geometry.Offset(p0.x + (p1.x - p0.x) / 2f, p0.y)
-                        val c2 = androidx.compose.ui.geometry.Offset(p0.x + (p1.x - p0.x) / 2f, p1.y)
-                        path.cubicTo(c1.x, c1.y, c2.x, c2.y, p1.x, p1.y)
-                    }
+                    val spacing = size.width / (labels.size - 1).coerceAtLeast(1)
 
-                    drawPath(
-                        path = path,
-                        color = color,
-                        style = androidx.compose.ui.graphics.drawscope.Stroke(
-                            width = 3.dp.toPx(),
-                            cap = androidx.compose.ui.graphics.StrokeCap.Round,
-                            join = androidx.compose.ui.graphics.StrokeJoin.Round,
-                            pathEffect = if (dashed) androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10f, 7f)) else null
+                    for (i in 0..4) {
+                        val y = i * (size.height / 4f)
+                        drawLine(
+                            color = textSecondary.copy(alpha = 0.12f),
+                            start = androidx.compose.ui.geometry.Offset(0f, y),
+                            end = androidx.compose.ui.geometry.Offset(size.width, y),
+                            strokeWidth = 1.dp.toPx()
                         )
-                    )
+                    }
+
+                    if (minValue <= 0.0 && maxValue >= 0.0) {
+                        val zeroY = yOf(0.0)
+                        drawLine(
+                            color = Color(0xFF334155).copy(alpha = 0.35f),
+                            start = androidx.compose.ui.geometry.Offset(0f, zeroY),
+                            end = androidx.compose.ui.geometry.Offset(size.width, zeroY),
+                            strokeWidth = 1.dp.toPx(),
+                            pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(8f, 8f))
+                        )
+                    }
+
+                    fun drawSeries(values: List<Double>, color: Color, dashed: Boolean = false) {
+                        if (values.size < 2) return
+                        val path = androidx.compose.ui.graphics.Path()
+                        val points = values.mapIndexed { idx, v ->
+                            androidx.compose.ui.geometry.Offset(idx * spacing, yOf(v))
+                        }
+
+                        path.moveTo(points.first().x, points.first().y)
+                        for (i in 0 until points.size - 1) {
+                            val p0 = points[i]
+                            val p1 = points[i + 1]
+                            val c1 = androidx.compose.ui.geometry.Offset(p0.x + (p1.x - p0.x) / 2f, p0.y)
+                            val c2 = androidx.compose.ui.geometry.Offset(p0.x + (p1.x - p0.x) / 2f, p1.y)
+                            path.cubicTo(c1.x, c1.y, c2.x, c2.y, p1.x, p1.y)
+                        }
+
+                        drawPath(
+                            path = path,
+                            color = color,
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(
+                                width = 3.dp.toPx(),
+                                cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                                join = androidx.compose.ui.graphics.StrokeJoin.Round,
+                                pathEffect = if (dashed) androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10f, 7f)) else null
+                            )
+                        )
+
+                        points.forEachIndexed { index, point ->
+                            val isSelected = index == selectedIndex
+                            drawCircle(
+                                color = color,
+                                radius = if (isSelected) 5.dp.toPx() else 3.dp.toPx(),
+                                center = point
+                            )
+                            if (isSelected) {
+                                drawCircle(
+                                    color = Color.White,
+                                    radius = 8.dp.toPx(),
+                                    center = point,
+                                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
+                                )
+                            }
+                        }
+                    }
+
+                    if (selectedIndex >= 0 && selectedIndex < labels.size) {
+                        val x = selectedIndex * spacing
+                        drawLine(
+                            color = textSecondary.copy(alpha = 0.25f),
+                            start = androidx.compose.ui.geometry.Offset(x, 0f),
+                            end = androidx.compose.ui.geometry.Offset(x, size.height),
+                            strokeWidth = 1.dp.toPx(),
+                            pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10f, 10f))
+                        )
+                    }
+
+                    drawSeries(income, StitchPrimary)
+                    drawSeries(expense, StitchAccentRed)
+                    drawSeries(net, Color(0xFF334155), dashed = true)
                 }
 
-                drawSeries(income, StitchPrimary)
-                drawSeries(expense, StitchAccentRed)
-                drawSeries(net, Color(0xFF334155), dashed = true)
-            }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    labels.forEachIndexed { index, label ->
+                        Text(
+                            text = label,
+                            fontSize = 9.sp,
+                            color = if (index == selectedIndex) StitchPrimary else textSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.widthIn(max = 44.dp),
+                            textAlign = TextAlign.Center,
+                            fontWeight = if (index == selectedIndex) FontWeight.Bold else FontWeight.Medium
+                        )
+                    }
+                }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                labels.forEach { label ->
-                    Text(
-                        text = label,
-                        fontSize = 9.sp,
-                        color = textSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.widthIn(max = 44.dp),
-                        textAlign = TextAlign.Center
+                if (selectedIndex >= 0 && selectedIndex < labels.size) {
+                    TooltipView(
+                        month = labels[selectedIndex],
+                        masuk = income.getOrElse(selectedIndex) { 0.0 },
+                        keluar = expense.getOrElse(selectedIndex) { 0.0 },
+                        isDark = isDark,
+                        modifier = Modifier
+                            .align(if (selectedIndex < labels.size / 2) Alignment.TopEnd else Alignment.TopStart)
+                            .padding(8.dp)
                     )
                 }
             }
@@ -1742,6 +2163,8 @@ fun CashflowTrendChart(
 fun NetBarChart(
     labels: List<String>,
     net: List<Double>,
+    selectedIndex: Int,
+    onSelectedIndexChange: (Int) -> Unit,
     isDark: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -1765,35 +2188,50 @@ fun NetBarChart(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                if (labels.isEmpty()) return@Canvas
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(labels, selectedIndex) {
+                        detectTapGestures { offset ->
+                            val widthPerItem = size.width.toFloat() / labels.size.coerceAtLeast(1)
+                            onSelectedIndexChange((offset.x / widthPerItem).toInt().coerceIn(0, labels.lastIndex))
+                        }
+                    }
+            ) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    if (labels.isEmpty()) return@Canvas
 
-                val values = net + listOf(0.0)
-                val maxAbs = (values.maxOfOrNull { kotlin.math.abs(it) } ?: 1.0).coerceAtLeast(1.0)
-                val centerY = size.height / 2f
-                val barWidth = (size.width / labels.size.coerceAtLeast(1)) * 0.55f
-                val spacing = size.width / labels.size.coerceAtLeast(1)
+                    val values = net + listOf(0.0)
+                    val maxAbs = (values.maxOfOrNull { kotlin.math.abs(it) } ?: 1.0).coerceAtLeast(1.0)
+                    val centerY = size.height / 2f
+                    val barWidth = (size.width / labels.size.coerceAtLeast(1)) * 0.55f
+                    val spacing = size.width / labels.size.coerceAtLeast(1)
 
-                drawLine(
-                    color = textSecondary.copy(alpha = 0.25f),
-                    start = androidx.compose.ui.geometry.Offset(0f, centerY),
-                    end = androidx.compose.ui.geometry.Offset(size.width, centerY),
-                    strokeWidth = 1.dp.toPx(),
-                    pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(8f, 8f))
-                )
-
-                net.forEachIndexed { index, value ->
-                    val barHeight = ((kotlin.math.abs(value) / maxAbs) * (size.height * 0.42f)).toFloat()
-                    val left = index * spacing + (spacing - barWidth) / 2f
-                    val top = if (value >= 0) centerY - barHeight else centerY
-                    val color = if (value >= 0) StitchPrimary else StitchAccentRed
-
-                    drawRoundRect(
-                        color = color.copy(alpha = 0.85f),
-                        topLeft = androidx.compose.ui.geometry.Offset(left, top),
-                        size = androidx.compose.ui.geometry.Size(barWidth, barHeight),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(8f, 8f)
+                    drawLine(
+                        color = textSecondary.copy(alpha = 0.25f),
+                        start = androidx.compose.ui.geometry.Offset(0f, centerY),
+                        end = androidx.compose.ui.geometry.Offset(size.width, centerY),
+                        strokeWidth = 1.dp.toPx(),
+                        pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(8f, 8f))
                     )
+
+                    net.forEachIndexed { index, value ->
+                        val barHeight = ((kotlin.math.abs(value) / maxAbs) * (size.height * 0.42f)).toFloat()
+                        val left = index * spacing + (spacing - barWidth) / 2f
+                        val top = if (value >= 0) centerY - barHeight else centerY
+                        val color = when {
+                            value > 0 -> StitchPrimary
+                            value < 0 -> StitchAccentRed
+                            else -> textSecondary.copy(alpha = 0.45f)
+                        }
+
+                        drawRoundRect(
+                            color = if (index == selectedIndex) color else color.copy(alpha = 0.65f),
+                            topLeft = androidx.compose.ui.geometry.Offset(left, top),
+                            size = androidx.compose.ui.geometry.Size(barWidth, barHeight.coerceAtLeast(4f)),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(8f, 8f)
+                        )
+                    }
                 }
             }
         }
@@ -1801,27 +2239,28 @@ fun NetBarChart(
 }
 
 @Composable
-fun CashflowInsightCard(
-    periodKey: String,
-    periodLabel: String,
-    labels: List<String>,
-    income: List<Double>,
-    expense: List<Double>,
-    net: List<Double>,
-    series: com.example.kassaku.data.remote.model.CashflowPeriodData?,
+private fun CashflowInsightCard(
+    resolved: CashflowResolvedData,
     isDark: Boolean
 ) {
-    val totalNet = series?.totalNet ?: net.sum()
-    val changePct = series?.changePct ?: 0.0
-    val maxExpenseValue = series?.maxExpenseValue ?: (expense.maxOrNull() ?: 0.0)
-    val maxExpenseLabel = series?.maxExpenseLabel ?: run {
-        val idx = expense.indices.maxByOrNull { expense[it] } ?: -1
-        if (idx >= 0 && idx < labels.size) labels[idx] else "-"
-    }
-
+    val series = resolved.series
+    val totalNet = series.totalNet
+    val changePct = series.changePct
+    val maxExpenseValue = series.maxExpenseValue
+    val maxExpenseLabel = series.maxExpenseLabel ?: "-"
     val changeColor = if (changePct >= 0) StitchPrimary else StitchAccentRed
     val surfaceColor = if (isDark) iOSSecondaryBackgroundDark else Color.White
     val textColor = if (isDark) Color.White else iOSLabelLight
+    val headline = when {
+        totalNet > 0 -> "Arus kas periode ini masih sehat"
+        totalNet < 0 -> "Pengeluaran periode ini lebih besar dari pemasukan"
+        else -> "Belum ada pergerakan arus kas pada periode ini"
+    }
+    val description = if (maxExpenseValue > 0) {
+        "Net cashflow ${if (changePct >= 0) "naik" else "turun"} ${formatSignedPercent(kotlin.math.abs(changePct))} dibanding periode sebelumnya. Pengeluaran tertinggi terjadi pada $maxExpenseLabel."
+    } else {
+        "Belum ada lonjakan pengeluaran di periode ini."
+    }
 
     Card(
         shape = RoundedCornerShape(20.dp),
@@ -1830,24 +2269,46 @@ fun CashflowInsightCard(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = "Insight $periodLabel",
+                text = "Insight ${resolved.periodLabel}",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = textColor
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "Net periode ini ${formatCurrency(totalNet)} (${if (changePct >= 0) "+" else ""}${String.format(Locale.US, "%.1f", changePct)}%).",
-                fontSize = 12.sp,
+                text = headline,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
                 color = textColor
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "Pengeluaran puncak di $maxExpenseLabel sebesar ${formatCurrency(maxExpenseValue)}.",
+                text = description,
                 fontSize = 12.sp,
-                color = textColor.copy(alpha = 0.85f)
+                lineHeight = 18.sp,
+                color = textColor.copy(alpha = 0.88f)
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Net: ${formatCurrency(totalNet)}",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = textColor
+                )
+                if (maxExpenseValue > 0) {
+                    Text(
+                        text = "Puncak: ${formatCurrency(maxExpenseValue)}",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = textColor
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(10.dp))
             Box(
                 modifier = Modifier
                     .fillMaxWidth()

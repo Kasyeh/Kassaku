@@ -7,11 +7,13 @@ import com.example.kassaku.data.remote.model.LoginResponse
 import com.example.kassaku.data.remote.model.UnblockRequestResponse
 import com.example.kassaku.data.remote.model.UserContent
 import com.google.gson.Gson
+import com.google.gson.JsonParser
 import retrofit2.Response
 
 class BlockedException(
     val idUser: Int,
     override val message: String,
+    val pendingUnblock: Boolean,
     val rejectedUnblock: Boolean,
     val rejectedMessage: String?
 ) : Exception(message)
@@ -49,6 +51,7 @@ class AuthRepository(private val apiService: ApiService) {
                         BlockedException(
                             blockedContent.idUser,
                             loginResponse.message,
+                            blockedContent.pendingUnblock,
                             blockedContent.rejectedUnblock,
                             blockedContent.rejectedMessage
                         )
@@ -67,9 +70,9 @@ class AuthRepository(private val apiService: ApiService) {
     /**
      * Mengirim permintaan unblock
      */
-    suspend fun submitUnblockRequest(userId: Int, message: String, fcmToken: String? = null): Result<UnblockRequestResponse> {
+    suspend fun submitUnblockRequest(username: String, password: String, message: String, fcmToken: String? = null): Result<UnblockRequestResponse> {
         return try {
-            val response = apiService.submitUnblockRequest(userId, message, fcmToken)
+            val response = apiService.submitUnblockRequest(username, password, message, fcmToken)
             if (response.isSuccessful) {
                 val body = response.body()
                 if (body != null && body.success) {
@@ -78,10 +81,31 @@ class AuthRepository(private val apiService: ApiService) {
                     Result.failure(Exception(body?.message ?: "Gagal mengirim permintaan unblock"))
                 }
             } else {
-                Result.failure(Exception("Error (${response.code()}): ${response.errorBody()?.string()}"))
+                val rawError = response.errorBody()?.string().orEmpty()
+                val userMessage = parseApiMessage(rawError)
+                    ?: when (response.code()) {
+                        400 -> "Permintaan unblock Anda masih sedang diproses admin."
+                        401 -> "Kredensial tidak valid. Silakan login ulang."
+                        422 -> "Data permintaan unblock belum lengkap."
+                        else -> "Gagal mengirim permintaan unblock. Silakan coba lagi."
+                    }
+                Result.failure(Exception(userMessage))
             }
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    private fun parseApiMessage(rawBody: String): String? {
+        if (rawBody.isBlank()) {
+            return null
+        }
+
+        return try {
+            val jsonObject = JsonParser.parseString(rawBody).asJsonObject
+            jsonObject.get("message")?.asString
+        } catch (_: Exception) {
+            null
         }
     }
 

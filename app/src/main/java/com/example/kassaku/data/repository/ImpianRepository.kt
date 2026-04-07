@@ -21,7 +21,7 @@ class ImpianRepository(private val apiService: ApiService) {
      */
     suspend fun getImpian(userId: Int): Result<List<ImpianItem>> {
         return try {
-            val response: Response<ImpianResponse> = apiService.getImpian(userId)
+            val response: Response<ImpianResponse> = apiService.getMyImpian()
             
             if (response.isSuccessful) {
                 val body = response.body()
@@ -64,14 +64,12 @@ class ImpianRepository(private val apiService: ApiService) {
             }
             
             // Convert parameters to RequestBody
-            val userIdBody = userId.toString().toRequestBody("text/plain".toMediaTypeOrNull())
             val namaBarangBody = namaBarang.toRequestBody("text/plain".toMediaTypeOrNull())
             val hargaBarangBody = hargaBarang.toString().toRequestBody("text/plain".toMediaTypeOrNull())
             val deadlineBody = deadline.toRequestBody("text/plain".toMediaTypeOrNull())
             val keteranganBody = if (keterangan.isNullOrBlank()) null else keterangan.toRequestBody("text/plain".toMediaTypeOrNull())
 
             val response: Response<TambahImpianResponse> = apiService.tambahImpian(
-                idUser = userIdBody,
                 namaBarang = namaBarangBody,
                 hargaBarang = hargaBarangBody,
                 deadline = deadlineBody,
@@ -99,7 +97,7 @@ class ImpianRepository(private val apiService: ApiService) {
      */
     suspend fun hapusImpian(idImpian: Long, userId: Int, password: String): Result<String> {
         return try {
-            val response = apiService.hapusImpian(idImpian, userId, password)
+            val response = apiService.hapusImpian(idImpian, password)
             if (response.isSuccessful && response.body()?.success == true) {
                 Result.success(response.body()?.message ?: "Impian berhasil dihapus")
             } else {
@@ -130,7 +128,6 @@ class ImpianRepository(private val apiService: ApiService) {
         return try {
             val response: Response<SetorImpianResponse> = apiService.setorImpian(
                 idImpian = idImpian,
-                idUser = userId,
                 nominal = nominal,
                 keterangan = keterangan,
                 tanggal = null

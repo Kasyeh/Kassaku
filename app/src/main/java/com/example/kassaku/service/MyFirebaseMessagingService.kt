@@ -10,6 +10,8 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.kassaku.MainActivity
 import com.example.kassaku.R
+import com.example.kassaku.utils.ForceLogoutManager
+import com.example.kassaku.viewmodel.LogoutReason
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import android.graphics.BitmapFactory
@@ -149,9 +151,16 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             }
             "admin" -> {
                 // Handle notifikasi dari admin
-                Log.d(TAG, "Admin Action: ${data["action"]}")
+                val action = data["action"]
+                val accountStatus = data["account_status"]
+                val forceLogout = data["force_logout"].equals("true", ignoreCase = true)
+                Log.d(TAG, "Admin Action: $action")
                 val message = data["message"] ?: "Pesan dari admin"
                 Log.d(TAG, "Admin message: $message")
+                if (forceLogout || action == "account_blocked" || accountStatus == "blocked") {
+                    Log.w(TAG, "Force logout signal received from FCM")
+                    ForceLogoutManager.trigger(LogoutReason.BLOCKED)
+                }
                 // Notifikasi sudah dipicu oleh onMessageReceived di atas jika data-only
             }
         }

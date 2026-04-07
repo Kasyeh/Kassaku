@@ -29,7 +29,7 @@ class RealtimeDatabaseRepository {
 
             override fun onCancelled(error: DatabaseError) {
                 Log.e(TAG, "Balance listener cancelled: ${error.message}")
-                close(error.toException())
+                trySend(null)
             }
         }
 
@@ -55,7 +55,7 @@ class RealtimeDatabaseRepository {
 
             override fun onCancelled(error: DatabaseError) {
                 Log.e(TAG, "Status listener cancelled: ${error.message}")
-                close(error.toException())
+                trySend(null)
             }
         }
 
@@ -73,6 +73,13 @@ class RealtimeDatabaseRepository {
         val status: String,
         val message: String?,
         val timestamp: Long
+    )
+
+    data class AccountEventData(
+        val event: String,
+        val message: String?,
+        val timestamp: Long,
+        val eventId: String?
     )
 
     /**
@@ -101,7 +108,7 @@ class RealtimeDatabaseRepository {
 
             override fun onCancelled(error: DatabaseError) {
                 Log.e(TAG, "Unblock response listener cancelled: ${error.message}")
-                close(error.toException())
+                trySend(null)
             }
         }
 
@@ -109,6 +116,42 @@ class RealtimeDatabaseRepository {
 
         awaitClose {
             responseRef.removeEventListener(listener)
+        }
+    }
+
+    fun getAccountEventFlow(userId: Int): Flow<AccountEventData?> = callbackFlow {
+        val eventRef = database.getReference("users/$userId/account_event")
+
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                if (!snapshot.exists()) {
+                    trySend(null)
+                    return
+                }
+
+                val event = snapshot.child("event").getValue(String::class.java)
+                val message = snapshot.child("message").getValue(String::class.java)
+                val timestamp = snapshot.child("timestamp").getValue(Long::class.java) ?: 0L
+                val eventId = snapshot.child("event_id").getValue(String::class.java)
+
+                if (event != null) {
+                    Log.d(TAG, "Account event received: event=$event, message=$message")
+                    trySend(AccountEventData(event, message, timestamp, eventId))
+                } else {
+                    trySend(null)
+                }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(TAG, "Account event listener cancelled: ${error.message}")
+                trySend(null)
+            }
+        }
+
+        eventRef.addValueEventListener(listener)
+
+        awaitClose {
+            eventRef.removeEventListener(listener)
         }
     }
 

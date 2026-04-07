@@ -18,6 +18,7 @@ data class UserContent(
 
 data class BlockedContent(
     @SerializedName("id_user") val idUser: Int,
+    @SerializedName("pending_unblock") val pendingUnblock: Boolean = false,
     @SerializedName("rejected_unblock") val rejectedUnblock: Boolean,
     @SerializedName("rejected_message") val rejectedMessage: String?
 )

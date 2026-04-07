@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
@@ -440,6 +441,7 @@ fun LoginScreen(
 
                 // Blocked Dialog with Request Form
                 if (showBlockedDialog && blockedInfo != null) {
+                    val hasPendingUnblock = blockedInfo?.pendingUnblock == true
                     AlertDialog(
                         onDismissRequest = { 
                             showBlockedDialog = false
@@ -467,6 +469,41 @@ fun LoginScreen(
                                     color = textSecondary,
                                     fontSize = 14.sp
                                 )
+
+                                if (hasPendingUnblock) {
+                                    Surface(
+                                        color = StitchPrimary.copy(alpha = 0.1f),
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(12.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.HourglassTop,
+                                                contentDescription = null,
+                                                tint = StitchPrimary
+                                            )
+                                            Column {
+                                                Text(
+                                                    text = "Permintaan sedang diproses",
+                                                    color = textPrimary,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 13.sp
+                                                )
+                                                Text(
+                                                    text = "Admin belum memberi respons. Anda tidak perlu mengirim permintaan baru.",
+                                                    color = textSecondary,
+                                                    fontSize = 12.sp
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                                 
                                 if (blockedInfo?.rejectedUnblock == true) {
                                     Surface(
@@ -487,25 +524,33 @@ fun LoginScreen(
                                 Divider(color = glassBorderColor)
 
                                 Text(
-                                    text = "Ajukan Permintaan Unblock",
+                                    text = if (hasPendingUnblock) "Status Permintaan Unblock" else "Ajukan Permintaan Unblock",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp,
                                     color = textPrimary
                                 )
 
-                                OutlinedTextField(
-                                    value = unblockPesan,
-                                    onValueChange = { unblockPesan = it },
-                                    placeholder = { Text("Alasan atau pesan ke admin...", fontSize = 14.sp) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    minLines = 3,
-                                    maxLines = 5,
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedBorderColor = StitchPrimary,
-                                        unfocusedBorderColor = textSecondary.copy(alpha = 0.5f)
+                                if (hasPendingUnblock) {
+                                    Text(
+                                        text = "Anda bisa menunggu notifikasi dari admin. Jika permintaan disetujui atau ditolak, aplikasi akan memberi tahu Anda secara realtime.",
+                                        color = textSecondary,
+                                        fontSize = 13.sp
                                     )
-                                )
+                                } else {
+                                    OutlinedTextField(
+                                        value = unblockPesan,
+                                        onValueChange = { unblockPesan = it },
+                                        placeholder = { Text("Alasan atau pesan ke admin...", fontSize = 14.sp) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        minLines = 3,
+                                        maxLines = 5,
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedBorderColor = StitchPrimary,
+                                            unfocusedBorderColor = textSecondary.copy(alpha = 0.5f)
+                                        )
+                                    )
+                                }
 
                                 if (unblockUiState is UnblockUiState.Error) {
                                     Text(
@@ -524,7 +569,7 @@ fun LoginScreen(
                                         loginViewModel.submitUnblockRequest(it.idUser, unblockPesan)
                                     }
                                 },
-                                enabled = unblockUiState !is UnblockUiState.Loading,
+                                enabled = !hasPendingUnblock && unblockUiState !is UnblockUiState.Loading,
                                 colors = ButtonDefaults.buttonColors(containerColor = StitchPrimary),
                                 shape = RoundedCornerShape(12.dp)
                             ) {
@@ -535,7 +580,10 @@ fun LoginScreen(
                                         strokeWidth = 2.dp
                                     )
                                 } else {
-                                    Text("Kirim Permintaan", fontWeight = FontWeight.Bold)
+                                    Text(
+                                        text = if (hasPendingUnblock) "Menunggu Respons Admin" else "Kirim Permintaan",
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 }
                             }
                         },

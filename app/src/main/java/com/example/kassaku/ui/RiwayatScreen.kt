@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
@@ -108,6 +109,7 @@ fun RiwayatScreen(
     // Filter states
     var selectedPeriode by remember { mutableStateOf<String?>(null) }
     var selectedJenis by remember { mutableStateOf<String?>(null) } // null, "pemasukan", "pengeluaran"
+    var selectedSearch by remember { mutableStateOf("") }
     var selectedTanggal by remember { mutableStateOf<String?>(null) }
     var selectedBulan by remember { mutableStateOf<Int?>(null) }
     var selectedTahun by remember { mutableStateOf<Int?>(null) }
@@ -119,14 +121,14 @@ fun RiwayatScreen(
     var showExportDialog by remember { mutableStateOf(false) }
     var showResetDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
-    var selectedExportPeriode by remember { mutableStateOf("semua") }
 
     // Fetch when filters change
-    LaunchedEffect(userId, selectedPeriode, selectedJenis, selectedTanggal, selectedBulan, selectedTahun) {
+    LaunchedEffect(userId, selectedPeriode, selectedJenis, selectedSearch, selectedTanggal, selectedBulan, selectedTahun) {
         homeViewModel.fetchRiwayatTransaksi(
             userId, 
             selectedPeriode, 
             selectedJenis, 
+            selectedSearch.takeIf { it.isNotBlank() },
             selectedTanggal, 
             selectedBulan, 
             selectedTahun
@@ -148,7 +150,12 @@ fun RiwayatScreen(
         if (isGranted) {
             homeViewModel.exportPdf(
                 userId = userId,
-                periode = if (selectedExportPeriode == "semua") null else selectedExportPeriode
+                periode = selectedPeriode,
+                jenis = selectedJenis,
+                search = selectedSearch.takeIf { it.isNotBlank() },
+                tanggal = selectedTanggal,
+                bulan = selectedBulan,
+                tahun = selectedTahun
             )
         } else {
             Toast.makeText(context, "Izin penyimpanan diperlukan untuk menyimpan PDF", Toast.LENGTH_SHORT).show()
@@ -161,7 +168,7 @@ fun RiwayatScreen(
             is ExportPdfResult.Success -> {
                 scope.launch(Dispatchers.IO) {
                     try {
-                        val fileName = "laporan_riwayat_${System.currentTimeMillis()}.pdf"
+                        val fileName = "laporan_riwayat_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())}.pdf"
                         val uri = savePdfToDownloads(context, result.responseBody.bytes(), fileName)
                         withContext(Dispatchers.Main) {
                             if (uri != null) {
@@ -297,6 +304,19 @@ fun RiwayatScreen(
                 }
             }
 
+            OutlinedTextField(
+                value = selectedSearch,
+                onValueChange = { selectedSearch = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 6.dp),
+                singleLine = true,
+                placeholder = { Text("Cari kategori atau keterangan") },
+                leadingIcon = {
+                    Icon(Icons.Default.Search, contentDescription = "Cari")
+                }
+            )
+
             // Active Filters Display
             val activeFilters = mutableListOf<String>()
             selectedPeriode?.let { 
@@ -314,6 +334,9 @@ fun RiwayatScreen(
                 activeFilters.add(monthName) 
             }
             selectedTahun?.let { activeFilters.add(it.toString()) }
+            if (selectedSearch.isNotBlank()) {
+                activeFilters.add("Cari: $selectedSearch")
+            }
 
             if (activeFilters.isNotEmpty()) {
                 Row(
@@ -341,6 +364,7 @@ fun RiwayatScreen(
                                     .size(16.dp)
                                     .clickable {
                                         selectedPeriode = null
+                                        selectedSearch = ""
                                         selectedTanggal = null
                                         selectedBulan = null
                                         selectedTahun = null
@@ -461,8 +485,6 @@ fun RiwayatScreen(
         
         if (showExportDialog) {
             ExportPdfDialog(
-                selectedPeriode = selectedExportPeriode,
-                onPeriodeChange = { newPeriod -> selectedExportPeriode = newPeriod },
                 onDismiss = { showExportDialog = false },
                 onExport = {
                     showExportDialog = false
@@ -470,7 +492,12 @@ fun RiwayatScreen(
                         if (ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
                             homeViewModel.exportPdf(
                                 userId = userId,
-                                periode = if (selectedExportPeriode == "semua") null else selectedExportPeriode
+                                periode = selectedPeriode,
+                                jenis = selectedJenis,
+                                search = selectedSearch.takeIf { it.isNotBlank() },
+                                tanggal = selectedTanggal,
+                                bulan = selectedBulan,
+                                tahun = selectedTahun
                             )
                         } else {
                             requestPermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
@@ -478,7 +505,12 @@ fun RiwayatScreen(
                     } else {
                         homeViewModel.exportPdf(
                             userId = userId,
-                            periode = if (selectedExportPeriode == "semua") null else selectedExportPeriode
+                            periode = selectedPeriode,
+                            jenis = selectedJenis,
+                            search = selectedSearch.takeIf { it.isNotBlank() },
+                            tanggal = selectedTanggal,
+                            bulan = selectedBulan,
+                            tahun = selectedTahun
                         )
                     }
                 }
@@ -877,40 +909,15 @@ fun FilterDialog(
 
 @Composable
 fun ExportPdfDialog(
-    selectedPeriode: String,
-    onPeriodeChange: (String) -> Unit,
     onDismiss: () -> Unit,
     onExport: () -> Unit
 ) {
-    val periodeOptions = listOf(
-        "semua" to "Semua Periode",
-        "hari_ini" to "Hari Ini",
-        "minggu_ini" to "Minggu Ini",
-        "bulan_ini" to "Bulan Ini"
-    )
-    
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(Icons.Default.PictureAsPdf, null, tint = StitchPrimary) },
         title = { Text("Export Laporan PDF") },
         text = {
-            Column {
-                periodeOptions.forEach { (key, label) ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onPeriodeChange(key) },
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = selectedPeriode == key,
-                            onClick = { onPeriodeChange(key) },
-                            colors = RadioButtonDefaults.colors(selectedColor = StitchPrimary)
-                        )
-                        Text(text = label, modifier = Modifier.padding(start = 8.dp))
-                    }
-                }
-            }
+            Text("PDF akan diexport menggunakan filter riwayat yang sedang aktif.")
         },
         confirmButton = { Button(onClick = onExport, colors = ButtonDefaults.buttonColors(containerColor = StitchPrimary)) { Text("Export PDF") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Batal") } }
@@ -996,4 +1003,3 @@ private fun openPdfFile(context: Context, uri: Uri) {
 fun RiwayatPreview() {
     // Mock viewmodel and display
 }
-

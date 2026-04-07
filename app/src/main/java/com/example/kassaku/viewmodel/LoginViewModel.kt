@@ -28,6 +28,7 @@ sealed interface LoginUiState {
     data class Blocked(
         val idUser: Int,
         val message: String,
+        val pendingUnblock: Boolean,
         val rejectedUnblock: Boolean,
         val rejectedMessage: String?
     ) : LoginUiState
@@ -44,6 +45,8 @@ class LoginViewModel(
     private val authRepository: AuthRepository = AuthRepository(ApiClient.api),
     private val realtimeDatabaseRepository: RealtimeDatabaseRepository = RealtimeDatabaseRepository()
 ) : ViewModel() {
+    private var lastLoginUsername: String? = null
+    private var lastLoginPassword: String? = null
     
     var loginUiState: LoginUiState by mutableStateOf(LoginUiState.Idle)
         private set
@@ -67,6 +70,8 @@ class LoginViewModel(
 
         viewModelScope.launch {
             try {
+                lastLoginUsername = username
+                lastLoginPassword = password
                 val result = authRepository.login(username, password)
                 
                 result.fold(
@@ -78,6 +83,7 @@ class LoginViewModel(
                             is BlockedException -> LoginUiState.Blocked(
                                 exception.idUser,
                                 exception.message,
+                                exception.pendingUnblock,
                                 exception.rejectedUnblock,
                                 exception.rejectedMessage
                             )
@@ -98,6 +104,13 @@ class LoginViewModel(
             return
         }
 
+        val username = lastLoginUsername
+        val password = lastLoginPassword
+        if (username.isNullOrBlank() || password.isNullOrBlank()) {
+            unblockUiState = UnblockUiState.Error("Silakan login ulang sebelum kirim permintaan unblock.")
+            return
+        }
+
         unblockUiState = UnblockUiState.Loading
 
         viewModelScope.launch {
@@ -110,7 +123,7 @@ class LoginViewModel(
                     null
                 }
 
-                val result = authRepository.submitUnblockRequest(idUser, pesan, fcmToken)
+                val result = authRepository.submitUnblockRequest(username, password, pesan, fcmToken)
                 result.fold(
                     onSuccess = { response ->
                         unblockUiState = UnblockUiState.Success(response.message)

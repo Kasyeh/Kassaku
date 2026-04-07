@@ -1,7 +1,12 @@
 package com.example.kassaku.data.remote
 
 import com.example.kassaku.data.remote.model.*
+import com.example.kassaku.utils.ForceLogoutManager
+import com.example.kassaku.viewmodel.LogoutReason
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import okhttp3.OkHttpClient
+import okhttp3.ResponseBody.Companion.toResponseBody
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Response
 import retrofit2.Retrofit
@@ -26,25 +31,25 @@ interface ApiService {
         @Field("password") password: String
     ): Response<RegisterResponse>
 
-    @GET("user/{id}/saldo")
-    suspend fun getUserBalance(@Path("id") userId: Int): Response<BalanceResponse>
+    @GET("me/saldo")
+    suspend fun getMyBalance(): Response<BalanceResponse>
 
-    @GET("riwayat/{id}")
-    suspend fun getRiwayatTransaksi(
-        @Path("id") userId: Int,
+    @GET("me/riwayat")
+    suspend fun getMyRiwayatTransaksi(
         @Query("periode") periode: String? = null,
         @Query("jenis") jenis: String? = null,
+        @Query("search") search: String? = null,
         @Query("tanggal") tanggal: String? = null,
         @Query("bulan") bulan: Int? = null,
         @Query("tahun") tahun: Int? = null,
         @Query("page") page: Int? = null
     ): Response<RiwayatResponse>
 
-    @GET("riwayat/{id}")
-    suspend fun getRiwayatTransaksiDirect(
-        @Path("id") userId: Int,
+    @GET("me/riwayat")
+    suspend fun getMyRiwayatTransaksiDirect(
         @Query("periode") periode: String? = null,
         @Query("jenis") jenis: String? = null,
+        @Query("search") search: String? = null,
         @Query("tanggal") tanggal: String? = null,
         @Query("bulan") bulan: Int? = null,
         @Query("tahun") tahun: Int? = null,
@@ -54,7 +59,6 @@ interface ApiService {
     @FormUrlEncoded
     @POST("pemasukan/tambah")
     suspend fun tambahPemasukan(
-        @Field("id_user") idUser: Int,
         @Field("nominal") nominal: Long,
         @Field("kategori") kategori: String,
         @Field("keterangan") keterangan: String?,
@@ -64,22 +68,18 @@ interface ApiService {
     @FormUrlEncoded
     @POST("pengeluaran/tambah")
     suspend fun tambahPengeluaran(
-        @Field("id_user") idUser: Int,
         @Field("nominal") nominal: Long,
         @Field("kategori") kategori: String,
         @Field("keterangan") keterangan: String?,
         @Field("tanggal") tanggal: String?
     ): PengeluaranResponse
 
-    @GET("impian/{id_user}")
-    suspend fun getImpian(
-        @Path("id_user") userId: Int
-    ): Response<ImpianResponse>
+    @GET("me/impian")
+    suspend fun getMyImpian(): Response<ImpianResponse>
 
     @Multipart
     @POST("impian/tambah")
     suspend fun tambahImpian(
-        @Part("id_user") idUser: okhttp3.RequestBody,
         @Part("nama_barang") namaBarang: okhttp3.RequestBody,
         @Part("harga_barang") hargaBarang: okhttp3.RequestBody,
         @Part("deadline") deadline: okhttp3.RequestBody,
@@ -88,30 +88,29 @@ interface ApiService {
     ): Response<TambahImpianResponse>
 
     // Export PDF Riwayat Transaksi
-    @GET("riwayat/{id_user}/export-pdf")
+    @GET("me/riwayat/export-pdf")
     @Streaming  // Penting untuk download file besar
-    suspend fun exportPdf(
-        @Path("id_user") userId: Int,
+    suspend fun exportMyPdf(
         @Query("periode") periode: String? = null,      // hari_ini, minggu_ini, bulan_ini, semua
+        @Query("tipe") tipe: String? = null,
+        @Query("search") search: String? = null,
         @Query("tanggal") tanggal: String? = null,      // format: yyyy-MM-dd
         @Query("bulan") bulan: Int? = null,             // 1-12
         @Query("tahun") tahun: Int? = null              // YYYY
     ): Response<okhttp3.ResponseBody>
 
-    @GET("user/{id}/statistik")
-    suspend fun getStatistik(@Path("id") userId: Int): Response<StatistikResponse>
+    @GET("me/statistik")
+    suspend fun getMyStatistik(): Response<StatistikResponse>
 
     @FormUrlEncoded
     @POST("target-pengeluaran/simpan")
     suspend fun simpanTargetPengeluaran(
-        @Field("id_user") idUser: Int,
         @Field("target_pengeluaran") targetPengeluaran: Long
     ): Response<TargetPengeluaranResponse>
 
     @FormUrlEncoded
     @POST("user/reset-saldo")
     suspend fun resetSaldo(
-        @Field("id_user") idUser: Int,
         @Field("password") password: String
     ): Response<ResetSaldoResponse>
 
@@ -119,7 +118,6 @@ interface ApiService {
     @POST("impian/hapus/{id_impian}")
     suspend fun hapusImpian(
         @Path("id_impian") idImpian: Long,
-        @Field("id_user") idUser: Int,
         @Field("password") password: String
     ): Response<HapusImpianResponse>
 
@@ -127,7 +125,6 @@ interface ApiService {
     @POST("impian/{id_impian}/setoran")
     suspend fun setorImpian(
         @Path("id_impian") idImpian: Long,
-        @Field("id_user") idUser: Int,
         @Field("nominal") nominal: Long,
         @Field("keterangan") keterangan: String?,
         @Field("tanggal") tanggal: String? = null
@@ -144,18 +141,18 @@ interface ApiService {
     @FormUrlEncoded
     @POST("unblock-request")
     suspend fun submitUnblockRequest(
-        @Field("id_user") idUser: Int,
+        @Field("username") username: String,
+        @Field("password") password: String,
         @Field("pesan") pesan: String,
         @Field("fcm_token") fcmToken: String? = null
     ): Response<UnblockRequestResponse>
 
-    @GET("user/{id}/budget-kategori")
-    suspend fun getBudgetKategori(@Path("id") userId: Int): Response<BudgetKategoriResponse>
+    @GET("me/budget-kategori")
+    suspend fun getMyBudgetKategori(): Response<BudgetKategoriResponse>
 
     @FormUrlEncoded
     @POST("user/budget-kategori/simpan")
     suspend fun simpanBudgetKategori(
-        @Field("id_user") idUser: Int,
         @Field("kategori") kategori: String,
         @Field("nominal") nominal: Long,
         @Field("periode") periode: String,
@@ -167,7 +164,6 @@ interface ApiService {
     @POST("user/budget-kategori/hapus/{id}")
     suspend fun hapusBudgetKategori(
         @Path("id") budgetId: Int,
-        @Field("id_user") idUser: Int,
         @Field("password") password: String
     ): Response<HapusBudgetResponse>
 }
@@ -208,6 +204,23 @@ object ApiClient {
 
             chain.proceed(requestBuilder.build())
         }
+        .addInterceptor { chain ->
+            val response = chain.proceed(chain.request())
+            val code = response.code
+
+            if (code != 401 && code != 403) {
+                return@addInterceptor response
+            }
+
+            val bodyString = response.body?.string().orEmpty()
+            if (shouldForceLogout(bodyString)) {
+                ForceLogoutManager.trigger(LogoutReason.BLOCKED)
+            }
+
+            response.newBuilder()
+                .body(bodyString.toResponseBody(response.body?.contentType()))
+                .build()
+        }
         .build()
 
     val api: ApiService by lazy {
@@ -217,5 +230,34 @@ object ApiClient {
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(ApiService::class.java)
+    }
+
+    private fun shouldForceLogout(rawBody: String): Boolean {
+        if (rawBody.isBlank()) {
+            return false
+        }
+
+        return try {
+            val json = JsonParser.parseString(rawBody).asJsonObject
+            isForceLogoutValueTrue(json, "force_logout") ||
+                json.getAsJsonObjectOrNull("content")?.let { isForceLogoutValueTrue(it, "force_logout") } == true ||
+                json.getAsJsonObjectOrNull("data")?.let { isForceLogoutValueTrue(it, "force_logout") } == true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun isForceLogoutValueTrue(jsonObject: JsonObject, key: String): Boolean {
+        val value = jsonObject.get(key) ?: return false
+        return when {
+            value.isJsonPrimitive && value.asJsonPrimitive.isBoolean -> value.asBoolean
+            value.isJsonPrimitive && value.asJsonPrimitive.isString -> value.asString.equals("true", ignoreCase = true)
+            else -> false
+        }
+    }
+
+    private fun JsonObject.getAsJsonObjectOrNull(memberName: String): JsonObject? {
+        val member = get(memberName) ?: return null
+        return if (member.isJsonObject) member.asJsonObject else null
     }
 }
