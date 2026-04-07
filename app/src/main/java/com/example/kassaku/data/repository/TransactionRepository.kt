@@ -7,6 +7,16 @@ import com.example.kassaku.data.remote.model.PemasukanResponse
 import com.example.kassaku.data.remote.model.PengeluaranResponse
 import com.example.kassaku.data.remote.model.RiwayatItem
 import com.example.kassaku.data.remote.model.RiwayatResponse
+import com.example.kassaku.data.remote.model.BudgetKategoriItem
+import com.example.kassaku.data.remote.model.BudgetKategoriResponse
+import com.example.kassaku.data.remote.model.SimpanBudgetResponse
+import com.example.kassaku.data.remote.model.HapusBudgetResponse
+import com.example.kassaku.viewmodel.PemasukanResult
+import com.example.kassaku.viewmodel.PengeluaranResult
+import com.example.kassaku.viewmodel.TargetPengeluaranResult
+import com.example.kassaku.viewmodel.BudgetActionResult
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import retrofit2.Response
 
 /**
@@ -92,37 +102,63 @@ class TransactionRepository(private val apiService: ApiService) {
      * Tambah pemasukan
      * @return Result dengan pesan sukses jika berhasil, atau pesan error jika gagal
      */
-    suspend fun tambahPemasukan(userId: Int, nominal: Int, kategori: String, keterangan: String, tanggal: String? = null): Result<String> {
-        return try {
-            val response: Response<PemasukanResponse> = apiService.tambahPemasukan(userId, nominal, kategori, keterangan, tanggal)
-            
-            if (response.isSuccessful) {
-                val message = response.body()?.message ?: "Pemasukan berhasil ditambahkan"
-                Result.success(message)
+    fun tambahPemasukan(
+        userId: Int,
+        nominal: Long,
+        kategori: String,
+        keterangan: String?,
+        tanggal: String?
+    ): Flow<PemasukanResult> = flow {
+        try {
+            val response = apiService.tambahPemasukan(userId, nominal, kategori, keterangan, tanggal)
+            if (response.success) {
+                emit(PemasukanResult.Success(response.message))
             } else {
-                Result.failure(Exception("Gagal menambahkan pemasukan: ${response.code()}"))
+                emit(PemasukanResult.Error(response.message))
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            emit(PemasukanResult.Error(e.message ?: "Terjadi kesalahan"))
         }
     }
 
-    /**
-     * Tambah pengeluaran
-     * @return Result dengan pesan sukses jika berhasil, atau pesan error jika gagal
-     */
-    suspend fun tambahPengeluaran(userId: Int, nominal: Int, kategori: String, keterangan: String, tanggal: String? = null): Result<String> {
-        return try {
-            val response: Response<PengeluaranResponse> = apiService.tambahPengeluaran(userId, nominal, kategori, keterangan, tanggal)
-            
-            if (response.isSuccessful) {
-                val message = response.body()?.message ?: "Pengeluaran berhasil ditambahkan"
-                Result.success(message)
+    fun tambahPengeluaran(
+        userId: Int,
+        nominal: Long,
+        kategori: String,
+        keterangan: String?,
+        tanggal: String?
+    ): Flow<PengeluaranResult> = flow {
+        try {
+            val response = apiService.tambahPengeluaran(userId, nominal, kategori, keterangan, tanggal)
+            if (response.success) {
+                emit(PengeluaranResult.Success(response.message))
             } else {
-                Result.failure(Exception("Gagal menambahkan pengeluaran: ${response.code()}"))
+                emit(PengeluaranResult.Error(response.message))
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            emit(PengeluaranResult.Error(e.message ?: "Terjadi kesalahan"))
+        }
+    }
+
+    fun simpanTargetPengeluaran(
+        userId: Int,
+        target: Long
+    ): Flow<TargetPengeluaranResult> = flow {
+        try {
+            val response = apiService.simpanTargetPengeluaran(userId, target)
+            if (response.isSuccessful && response.body() != null) {
+                val body = response.body()!!
+                emit(TargetPengeluaranResult.Success(
+                    body.message,
+                    body.data?.isOverBudget ?: false,
+                    body.data?.targetPengeluaran?.toLong() ?: 0L
+                ))
+            } else {
+                val errorMsg = response.message()
+                emit(TargetPengeluaranResult.Error(if (errorMsg.isNullOrEmpty()) "Gagal menyimpan target" else errorMsg))
+            }
+        } catch (e: Exception) {
+            emit(TargetPengeluaranResult.Error(e.message ?: "Terjadi kesalahan"))
         }
     }
 
@@ -141,6 +177,56 @@ class TransactionRepository(private val apiService: ApiService) {
             }
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    suspend fun getBudgetKategori(userId: Int): Result<List<BudgetKategoriItem>> {
+        return try {
+            val response = apiService.getBudgetKategori(userId)
+            if (response.isSuccessful) {
+                Result.success(response.body()?.data ?: emptyList())
+            } else {
+                Result.failure(Exception("Gagal ambil budget: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    fun simpanBudgetKategori(
+        userId: Int,
+        kategori: String,
+        nominal: Long,
+        periode: String,
+        tanggalMulai: String? = null,
+        tanggalAkhir: String? = null
+    ): Flow<BudgetActionResult> = flow {
+        try {
+            val response = apiService.simpanBudgetKategori(userId, kategori, nominal, periode, tanggalMulai, tanggalAkhir)
+            if (response.isSuccessful && response.body()?.success == true) {
+                emit(BudgetActionResult.Success(response.body()?.message ?: "Budget disimpan"))
+            } else {
+                emit(BudgetActionResult.Error(response.body()?.message ?: "Gagal simpan budget"))
+            }
+        } catch (e: Exception) {
+            emit(BudgetActionResult.Error(e.message ?: "Terjadi kesalahan"))
+        }
+    }
+
+    fun hapusBudgetKategori(
+        budgetId: Int,
+        userId: Int,
+        password: String
+    ): Flow<BudgetActionResult> = flow {
+        try {
+            val response = apiService.hapusBudgetKategori(budgetId, userId, password)
+            if (response.isSuccessful && response.body()?.success == true) {
+                emit(BudgetActionResult.Success(response.body()?.message ?: "Budget dihapus"))
+            } else {
+                emit(BudgetActionResult.Error(response.body()?.message ?: "Gagal hapus budget"))
+            }
+        } catch (e: Exception) {
+            emit(BudgetActionResult.Error(e.message ?: "Terjadi kesalahan"))
         }
     }
 }

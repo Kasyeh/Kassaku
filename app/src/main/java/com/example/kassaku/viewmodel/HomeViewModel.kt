@@ -21,23 +21,7 @@ enum class LogoutReason {
 }
 
 
-sealed class PemasukanResult {
-    data class Success(val message: String) : PemasukanResult()
-    data class Error(val message: String) : PemasukanResult()
-    object Idle : PemasukanResult()
-}
 
-sealed class PengeluaranResult {
-    data class Success(val message: String) : PengeluaranResult()
-    data class Error(val message: String) : PengeluaranResult()
-    object Idle : PengeluaranResult()
-}
-
-sealed class TambahImpianResult {
-    data class Success(val message: String) : TambahImpianResult()
-    data class Error(val message: String) : TambahImpianResult()
-    object Idle : TambahImpianResult()
-}
 
 open class HomeViewModel(
     private val transactionRepository: TransactionRepository = TransactionRepository(ApiClient.api),
@@ -65,6 +49,8 @@ open class HomeViewModel(
 
     private val _hapusImpianResult = MutableStateFlow<HapusImpianResult>(HapusImpianResult.Idle)
     val hapusImpianResult: StateFlow<HapusImpianResult> = _hapusImpianResult.asStateFlow()
+    private val _setorImpianResult = MutableStateFlow<SetorImpianResult>(SetorImpianResult.Idle)
+    val setorImpianResult: StateFlow<SetorImpianResult> = _setorImpianResult.asStateFlow()
 
     private val _logoutNavigationEvent = MutableSharedFlow<LogoutReason>()
     open val logoutNavigationEvent: SharedFlow<LogoutReason> = _logoutNavigationEvent.asSharedFlow()
@@ -74,6 +60,9 @@ open class HomeViewModel(
 
     private val _themeMode = MutableStateFlow(ThemeMode.SYSTEM)
     open val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
+
+    private val _budgetActionResult = MutableStateFlow<BudgetActionResult>(BudgetActionResult.Idle)
+    val budgetActionResult: StateFlow<BudgetActionResult> = _budgetActionResult.asStateFlow()
 
     fun setThemeMode(mode: ThemeMode) {
         _themeMode.value = mode
@@ -118,37 +107,27 @@ open class HomeViewModel(
         }
     }
 
-    fun tambahPemasukan(userId: Int, nominal: Int, kategori: String, keterangan: String, tanggal: String? = null) {
+    fun tambahPemasukan(userId: Int, nominal: Long, kategori: String, keterangan: String, tanggal: String? = null) {
         viewModelScope.launch {
-            val result = transactionRepository.tambahPemasukan(userId, nominal, kategori, keterangan, tanggal)
-            result.fold(
-                onSuccess = { message ->
-                    _pemasukanResult.value = PemasukanResult.Success(message)
-                    // Update data balance & riwayat setelah sukses
+            transactionRepository.tambahPemasukan(userId, nominal, kategori, keterangan, tanggal).collect { result ->
+                _pemasukanResult.value = result
+                if (result is PemasukanResult.Success) {
                     loadBalanceData(userId)
                     fetchRiwayatTransaksi(userId)
-                },
-                onFailure = { exception ->
-                    _pemasukanResult.value = PemasukanResult.Error(exception.message ?: "Gagal menambahkan pemasukan")
                 }
-            )
+            }
         }
     }
 
-    fun tambahPengeluaran(userId: Int, nominal: Int, kategori: String, keterangan: String, tanggal: String? = null) {
+    fun tambahPengeluaran(userId: Int, nominal: Long, kategori: String, keterangan: String, tanggal: String? = null) {
         viewModelScope.launch {
-            val result = transactionRepository.tambahPengeluaran(userId, nominal, kategori, keterangan, tanggal)
-            result.fold(
-                onSuccess = { message ->
-                    _pengeluaranResult.value = PengeluaranResult.Success(message)
-                    // Update data
+            transactionRepository.tambahPengeluaran(userId, nominal, kategori, keterangan, tanggal).collect { result ->
+                _pengeluaranResult.value = result
+                if (result is PengeluaranResult.Success) {
                     loadBalanceData(userId)
                     fetchRiwayatTransaksi(userId)
-                },
-                onFailure = { exception ->
-                    _pengeluaranResult.value = PengeluaranResult.Error(exception.message ?: "Gagal menambahkan pengeluaran")
                 }
-            )
+            }
         }
     }
 
@@ -207,9 +186,9 @@ open class HomeViewModel(
         }
     }
 
-    fun tambahImpian(userId: Int, namaBarang: String, hargaBarang: Int, deadline: String, fotoPart: okhttp3.MultipartBody.Part?) {
+    fun tambahImpian(userId: Int, namaBarang: String, hargaBarang: Long, deadline: String, keterangan: String?, fotoPart: okhttp3.MultipartBody.Part?) {
         viewModelScope.launch {
-            val result = impianRepository.tambahImpian(userId, namaBarang, hargaBarang, deadline, fotoPart)
+            val result = impianRepository.tambahImpian(userId, namaBarang, hargaBarang, deadline, keterangan, fotoPart)
             result.fold(
                 onSuccess = { message ->
                     _tambahImpianResult.value = TambahImpianResult.Success(message)
@@ -245,6 +224,30 @@ open class HomeViewModel(
 
     fun resetHapusImpianResult() {
         _hapusImpianResult.value = HapusImpianResult.Idle
+    }
+
+    fun setorImpian(idImpian: Long, userId: Int, nominal: Long, keterangan: String?) {
+        viewModelScope.launch {
+            _setorImpianResult.value = SetorImpianResult.Loading
+            val result = impianRepository.setorImpian(idImpian, userId, nominal, keterangan)
+            result.fold(
+                onSuccess = { message ->
+                    _setorImpianResult.value = SetorImpianResult.Success(message)
+                    fetchImpian(userId)
+                    fetchRiwayatTransaksi(userId)
+                    loadBalanceData(userId)
+                },
+                onFailure = { exception ->
+                    _setorImpianResult.value = SetorImpianResult.Error(
+                        exception.message ?: "Gagal menyimpan setoran impian"
+                    )
+                }
+            )
+        }
+    }
+
+    fun resetSetorImpianResult() {
+        _setorImpianResult.value = SetorImpianResult.Idle
     }
 
     // ===============================
@@ -319,27 +322,11 @@ open class HomeViewModel(
 
     fun simpanTargetPengeluaran(userId: Int, targetPengeluaran: Long) {
         viewModelScope.launch {
-            _targetPengeluaranResult.value = TargetPengeluaranResult.Loading
-            try {
-                val response = ApiClient.api.simpanTargetPengeluaran(userId, targetPengeluaran)
-                if (response.isSuccessful && response.body()?.success == true) {
-                    val data = response.body()?.data
-                    _targetPengeluaranResult.value = TargetPengeluaranResult.Success(
-                        message = response.body()?.message ?: "Target berhasil disimpan",
-                        isOverBudget = data?.isOverBudget ?: false
-                    )
-                    // Refresh balance data
+            transactionRepository.simpanTargetPengeluaran(userId, targetPengeluaran).collect { result ->
+                _targetPengeluaranResult.value = result
+                if (result is TargetPengeluaranResult.Success) {
                     loadBalanceData(userId)
-                } else {
-                    _targetPengeluaranResult.value = TargetPengeluaranResult.Error(
-                        response.body()?.message ?: "Gagal menyimpan target"
-                    )
                 }
-            } catch (e: Exception) {
-                android.util.Log.e("HomeViewModel", "Error saving target: ${e.message}", e)
-                _targetPengeluaranResult.value = TargetPengeluaranResult.Error(
-                    e.message ?: "Gagal menyimpan target"
-                )
             }
         }
     }
@@ -385,36 +372,44 @@ open class HomeViewModel(
     fun resetResetSaldoResult() {
         _resetSaldoResult.value = ResetSaldoResult.Idle
     }
+
+    // ===============================
+    // BUDGET PER KATEGORI
+    // ===============================
+    fun simpanBudgetKategori(
+        userId: Int,
+        kategori: String,
+        nominal: Long,
+        periode: String,
+        tanggalMulai: String? = null,
+        tanggalAkhir: String? = null
+    ) {
+        viewModelScope.launch {
+            _budgetActionResult.value = BudgetActionResult.Loading
+            transactionRepository.simpanBudgetKategori(userId, kategori, nominal, periode, tanggalMulai, tanggalAkhir)
+                .collect { result ->
+                    _budgetActionResult.value = result
+                    if (result is BudgetActionResult.Success) {
+                        fetchStatistik(userId)
+                    }
+                }
+        }
+    }
+
+    fun hapusBudgetKategori(budgetId: Int, userId: Int, password: String) {
+        viewModelScope.launch {
+            _budgetActionResult.value = BudgetActionResult.Loading
+            transactionRepository.hapusBudgetKategori(budgetId, userId, password).collect { result ->
+                _budgetActionResult.value = result
+                if (result is BudgetActionResult.Success) {
+                    fetchStatistik(userId)
+                }
+            }
+        }
+    }
+
+    fun resetBudgetActionResult() {
+        _budgetActionResult.value = BudgetActionResult.Idle
+    }
 }
 
-// Sealed class untuk hasil reset saldo
-sealed class ResetSaldoResult {
-    object Idle : ResetSaldoResult()
-    object Loading : ResetSaldoResult()
-    data class Success(val message: String) : ResetSaldoResult()
-    data class Error(val message: String) : ResetSaldoResult()
-}
-
-// Sealed class untuk hasil export PDF
-sealed class ExportPdfResult {
-    object Idle : ExportPdfResult()
-    object Loading : ExportPdfResult()
-    data class Success(val responseBody: okhttp3.ResponseBody) : ExportPdfResult()
-    data class Error(val message: String) : ExportPdfResult()
-}
-
-// Sealed class untuk hasil simpan target pengeluaran
-sealed class TargetPengeluaranResult {
-    object Idle : TargetPengeluaranResult()
-    object Loading : TargetPengeluaranResult()
-    data class Success(val message: String, val isOverBudget: Boolean) : TargetPengeluaranResult()
-    data class Error(val message: String) : TargetPengeluaranResult()
-}
-
-// Sealed class untuk hasil hapus impian
-sealed class HapusImpianResult {
-    object Idle : HapusImpianResult()
-    object Loading : HapusImpianResult()
-    data class Success(val message: String) : HapusImpianResult()
-    data class Error(val message: String) : HapusImpianResult()
-}

@@ -9,6 +9,11 @@ import com.example.kassaku.data.remote.ApiClient
 import com.example.kassaku.data.remote.model.UserContent
 import com.example.kassaku.data.repository.AuthRepository
 import com.example.kassaku.data.repository.BlockedException
+import com.example.kassaku.data.repository.RealtimeDatabaseRepository
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.io.IOException
@@ -36,7 +41,8 @@ sealed interface UnblockUiState {
 }
 
 class LoginViewModel(
-    private val authRepository: AuthRepository = AuthRepository(ApiClient.api)
+    private val authRepository: AuthRepository = AuthRepository(ApiClient.api),
+    private val realtimeDatabaseRepository: RealtimeDatabaseRepository = RealtimeDatabaseRepository()
 ) : ViewModel() {
     
     var loginUiState: LoginUiState by mutableStateOf(LoginUiState.Idle)
@@ -44,6 +50,12 @@ class LoginViewModel(
 
     var unblockUiState: UnblockUiState by mutableStateOf(UnblockUiState.Idle)
         private set
+
+    // Realtime unblock response from admin via RTDB
+    private val _unblockResponseState = MutableStateFlow<RealtimeDatabaseRepository.UnblockResponseData?>(null)
+    val unblockResponseState: StateFlow<RealtimeDatabaseRepository.UnblockResponseData?> = _unblockResponseState.asStateFlow()
+
+    private var unblockResponseJob: Job? = null
 
     fun login(username: String, password: String) {
         if (username.isBlank() || password.isBlank()) {
@@ -113,11 +125,47 @@ class LoginViewModel(
         }
     }
 
+    /**
+     * Start listening to RTDB for admin's unblock response
+     * Called when blocked dialog is shown and user ID is available
+     */
+    fun startListeningUnblockResponse(userId: Int) {
+        // Cancel any existing listener
+        unblockResponseJob?.cancel()
+        unblockResponseJob = viewModelScope.launch {
+            realtimeDatabaseRepository.getUnblockResponseFlow(userId).collect { response ->
+                Log.d("LoginViewModel", "Unblock response update: $response")
+                _unblockResponseState.value = response
+            }
+        }
+    }
+
+    /**
+     * Stop listening to RTDB and clean up
+     */
+    fun stopListeningUnblockResponse() {
+        unblockResponseJob?.cancel()
+        unblockResponseJob = null
+    }
+
+    /**
+     * Acknowledge the unblock response and clear it from RTDB
+     */
+    fun acknowledgeUnblockResponse(userId: Int) {
+        _unblockResponseState.value = null
+        realtimeDatabaseRepository.clearUnblockResponse(userId)
+    }
+
     fun resetUnblockState() {
         unblockUiState = UnblockUiState.Idle
     }
 
     fun resetLoginState() {
         loginUiState = LoginUiState.Idle
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        stopListeningUnblockResponse()
     }
 }

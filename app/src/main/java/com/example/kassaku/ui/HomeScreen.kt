@@ -83,12 +83,15 @@ import com.example.kassaku.ui.components.form.TransactionFormState
 import com.example.kassaku.ui.components.form.TransactionFormData
 import com.example.kassaku.ui.components.FinancialInsightCard
 import com.example.kassaku.ui.components.MiniTrendChart
+import com.example.kassaku.utils.formatDisplayDate
+import com.example.kassaku.utils.formatDisplayTime
 
 // Data model for simplified transaction usage
 data class Transaction(
     val id: String,
     val name: String,
     val date: String,
+    val time: String? = null,
     val amount: Double,
     val type: TransactionType,
 )
@@ -240,6 +243,7 @@ fun HomeScreen(
                         id = item.idTransaksi.toString(),
                         name = item.kategori ?: "Tanpa Kategori",
                         date = item.tanggal ?: "Tanggal tidak diketahui",
+                        time = if (item.tanggal?.contains(" ") == true) item.tanggal.split(" ")[1].substring(0, 5) else null,
                         amount = if (type == TransactionType.EXPENSE) -abs(amount) else abs(amount),
                         type = type,
                     )
@@ -501,26 +505,46 @@ fun HomeScreen(
             ) {
                 // Action Buttons - iOS style
                 item {
-                    Row(
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            ActionButton(
+                                text = "Pemasukan",
+                                icon = Icons.Rounded.Add,
+                                backgroundColor = accentColor,
+                                contentColor = Color.White,
+                                onClick = { showPemasukanSheet = true },
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            ActionButton(
+                                text = "Pengeluaran",
+                                icon = Icons.Rounded.Remove,
+                                backgroundColor = accentRed,
+                                contentColor = Color.White,
+                                onClick = { showPengeluaranSheet = true },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
                         ActionButton(
-                            text = "Pemasukan",
-                            icon = Icons.Rounded.Add,
-                            backgroundColor = accentColor,
-                            contentColor = StitchTextPrimary, // Better contrast
-                            onClick = { showPemasukanSheet = true },
-                            modifier = Modifier.weight(1f)
-                        )
-                        
-                        ActionButton(
-                            text = "Pengeluaran",
-                            icon = Icons.Rounded.Remove,
-                            backgroundColor = accentRed,
+                            text = "Setor Impian",
+                            icon = Icons.Filled.Paid,
+                            backgroundColor = StitchPrimary,
                             contentColor = Color.White,
-                            onClick = { showPengeluaranSheet = true },
-                            modifier = Modifier.weight(1f)
+                            onClick = {
+                                navController.navigate(BottomNavItem.Impian.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
                 }
@@ -776,10 +800,11 @@ fun HomeScreen(
             },
             onSubmit = { formData ->
                 pemasukanFormState = TransactionFormState.Submitting
-                val dateStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date(formData.date))
+                // Use yyyy-MM-dd HH:mm:ss to preserve time from System.currentTimeMillis()
+                val dateStr = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date(formData.date))
                 homeViewModel.tambahPemasukan(
                     userId, 
-                    formData.amount.toInt(), 
+                    formData.amount.toLong(), 
                     formData.category.replaceFirstChar { it.uppercase() }, 
                     formData.notes,
                     dateStr
@@ -788,20 +813,31 @@ fun HomeScreen(
         )
         
         // Pengeluaran Form Sheet
+        val budgetedCategories = remember(statistikData) {
+            statistikData?.budgetKategori?.map { budget ->
+                com.example.kassaku.ui.components.form.CategoryOption(
+                    id = budget.id.toString(),
+                    label = budget.kategori.replaceFirstChar { it.uppercase() }
+                )
+            }
+        }
+
         TransactionFormSheet(
             isVisible = showPengeluaranSheet,
             isExpense = true,
             formState = pengeluaranFormState,
+            customCategories = budgetedCategories,
             onDismiss = { 
                 showPengeluaranSheet = false 
                 pengeluaranFormState = TransactionFormState.Idle
             },
             onSubmit = { formData ->
                 pengeluaranFormState = TransactionFormState.Submitting
-                val dateStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date(formData.date))
+                // Use yyyy-MM-dd HH:mm:ss to preserve time from System.currentTimeMillis()
+                val dateStr = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date(formData.date))
                 homeViewModel.tambahPengeluaran(
                     userId, 
-                    formData.amount.toInt(), 
+                    formData.amount.toLong(), 
                     formData.category.replaceFirstChar { it.uppercase() }, 
                     formData.notes,
                     dateStr
@@ -897,13 +933,13 @@ fun TransactionItemCard(transaction: Transaction, isDark: Boolean) {
             modifier = Modifier
                 .size(44.dp)
                 .background(
-                    color = if (isDark) Color(0xFF1F2937) else Color(0xFFF1F5F9),
-                    shape = CircleShape
+                    color = if (isIncome) StitchPrimaryLight else Color(0x33EF4444),
+                    shape = RoundedCornerShape(16.dp)
                 ),
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = if (isIncome) Icons.Rounded.ArrowDownward else Icons.Rounded.ArrowUpward,
+                imageVector = if (isIncome) Icons.Rounded.Add else Icons.Rounded.Remove,
                 contentDescription = null,
                 tint = accentColor,
                 modifier = Modifier.size(20.dp)
@@ -921,11 +957,20 @@ fun TransactionItemCard(transaction: Transaction, isDark: Boolean) {
                 color = labelColor
             )
             Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = transaction.date,
-                style = MaterialTheme.typography.bodySmall,
-                color = secondaryLabel
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = formatDisplayDate(transaction.date),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = secondaryLabel
+                )
+                if (transaction.time != null) {
+                    Text(
+                        text = " • ${transaction.time}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = secondaryLabel
+                    )
+                }
+            }
         }
         
         // Amount

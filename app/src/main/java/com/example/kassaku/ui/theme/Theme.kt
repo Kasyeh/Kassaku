@@ -32,10 +32,10 @@ private val LightColors = lightColorScheme(
 )
 
 private val DarkColors = darkColorScheme(
-    primary = ToscaPrimary,              // Tosca tetap di dark mode
-    primaryContainer = Color(0xFF1A4D47), // Tosca gelap untuk container di dark mode
+    primary = ToscaPrimary,              // Emerald tetap di dark mode
+    primaryContainer = Color(0xFF064E3B), // Emerald gelap untuk container di dark mode
     onPrimaryContainer = ToscaPrimary,   // Text on primary container
-    secondary = SoftRed,                 // Merah untuk pengeluaran
+    secondary = SoftRed,                 // Rose untuk pengeluaran
     tertiary = GoldAccent,
     background = DarkBackground,
     surface = DarkSurface,

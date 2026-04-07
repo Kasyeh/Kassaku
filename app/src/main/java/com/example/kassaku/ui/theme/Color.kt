@@ -3,10 +3,10 @@ package com.example.kassaku.ui.theme
 import androidx.compose.ui.graphics.Color
 
 // Light & Dark Primary Colors
-val ToscaPrimary = Color(0xFF56DFCF)  // Warna primer tosca
-val ToscaContainer = Color(0xFFE0F7F5) // Tosca muda untuk container
-val SoftRed = Color(0xFFD32F2F)       // Merah untuk pengeluaran/error
-val GoldAccent = Color(0xFFFFD54F)    // Gold untuk tertiary
+val ToscaPrimary = Color(0xFF10B981)  // Emerald 500
+val ToscaContainer = Color(0xFFECFDF5) // Emerald 50 untuk container
+val SoftRed = Color(0xFFEF4444)       // Rose 500 untuk pengeluaran/error
+val GoldAccent = Color(0xFFF59E0B)    // Amber 500 untuk tertiary
 
 // Light Theme Colors
 val LightBackground = Color(0xFFF5F5F5)  // Background abu-abu muda netral
@@ -23,11 +23,11 @@ val DarkSurfaceVariant = Color(0xFF2C2C2C)  // Darker gray for cards/chips
 val DarkOnSurfaceVariant = Color(0xFFBDBDBD)   // Lighter text for dark variants
 
 // Design Specific Colors
-val StitchPrimary = Color(0xFF56DFCF)
-val StitchPrimaryDark = Color(0xFF3BC7B7)
-val StitchPrimaryLight = Color(0x2656DFCF) // 15% opacity
+val StitchPrimary = Color(0xFF10B981)
+val StitchPrimaryDark = Color(0xFF059669)
+val StitchPrimaryLight = Color(0x2610B981) // 15% opacity
 val StitchNegative = Color(0xFFEF4444)
-val StitchAccentRed = Color(0xFFFF5252)
+val StitchAccentRed = Color(0xFFEF4444)
 val StitchBackgroundLight = Color(0xFFF8FAFC)
 val StitchBackgroundDark = Color(0xFF111827)
 val StitchTextPrimary = Color(0xFF1E293B)

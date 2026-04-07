@@ -55,21 +55,21 @@ interface ApiService {
     @POST("pemasukan/tambah")
     suspend fun tambahPemasukan(
         @Field("id_user") idUser: Int,
-        @Field("nominal") nominal: Int,
+        @Field("nominal") nominal: Long,
         @Field("kategori") kategori: String,
-        @Field("keterangan") keterangan: String,
-        @Field("tanggal") tanggal: String? = null
-    ): Response<PemasukanResponse>
+        @Field("keterangan") keterangan: String?,
+        @Field("tanggal") tanggal: String?
+    ): PemasukanResponse
 
     @FormUrlEncoded
     @POST("pengeluaran/tambah")
     suspend fun tambahPengeluaran(
         @Field("id_user") idUser: Int,
-        @Field("nominal") nominal: Int,
+        @Field("nominal") nominal: Long,
         @Field("kategori") kategori: String,
-        @Field("keterangan") keterangan: String,
-        @Field("tanggal") tanggal: String? = null
-    ): Response<PengeluaranResponse>
+        @Field("keterangan") keterangan: String?,
+        @Field("tanggal") tanggal: String?
+    ): PengeluaranResponse
 
     @GET("impian/{id_user}")
     suspend fun getImpian(
@@ -83,6 +83,7 @@ interface ApiService {
         @Part("nama_barang") namaBarang: okhttp3.RequestBody,
         @Part("harga_barang") hargaBarang: okhttp3.RequestBody,
         @Part("deadline") deadline: okhttp3.RequestBody,
+        @Part("keterangan") keterangan: okhttp3.RequestBody?,
         @Part fotoBarang: okhttp3.MultipartBody.Part  // ✅ Tanpa nama & tidak nullable
     ): Response<TambahImpianResponse>
 
@@ -122,6 +123,16 @@ interface ApiService {
         @Field("password") password: String
     ): Response<HapusImpianResponse>
 
+    @FormUrlEncoded
+    @POST("impian/{id_impian}/setoran")
+    suspend fun setorImpian(
+        @Path("id_impian") idImpian: Long,
+        @Field("id_user") idUser: Int,
+        @Field("nominal") nominal: Long,
+        @Field("keterangan") keterangan: String?,
+        @Field("tanggal") tanggal: String? = null
+    ): Response<SetorImpianResponse>
+
     // FCM Token Management
     @FormUrlEncoded
     @POST("fcm-token")
@@ -137,12 +148,48 @@ interface ApiService {
         @Field("pesan") pesan: String,
         @Field("fcm_token") fcmToken: String? = null
     ): Response<UnblockRequestResponse>
+
+    @GET("user/{id}/budget-kategori")
+    suspend fun getBudgetKategori(@Path("id") userId: Int): Response<BudgetKategoriResponse>
+
+    @FormUrlEncoded
+    @POST("user/budget-kategori/simpan")
+    suspend fun simpanBudgetKategori(
+        @Field("id_user") idUser: Int,
+        @Field("kategori") kategori: String,
+        @Field("nominal") nominal: Long,
+        @Field("periode") periode: String,
+        @Field("tanggal_mulai") tanggalMulai: String? = null,
+        @Field("tanggal_akhir") tanggalAkhir: String? = null
+    ): Response<SimpanBudgetResponse>
+
+    @FormUrlEncoded
+    @POST("user/budget-kategori/hapus/{id}")
+    suspend fun hapusBudgetKategori(
+        @Path("id") budgetId: Int,
+        @Field("id_user") idUser: Int,
+        @Field("password") password: String
+    ): Response<HapusBudgetResponse>
 }
 
 // --- API CLIENT OBJECT ---
 
 object ApiClient {
     private const val BASE_URL = "http://10.0.2.2:8000/api/"
+
+    // Token holder — set setelah login/register berhasil
+    @Volatile
+    private var authToken: String? = null
+
+    fun setToken(token: String?) {
+        authToken = token
+    }
+
+    fun clearToken() {
+        authToken = null
+    }
+
+    fun getToken(): String? = authToken
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY
@@ -151,10 +198,15 @@ object ApiClient {
     private val client = OkHttpClient.Builder()
         .addInterceptor(loggingInterceptor)
         .addInterceptor { chain ->
-            val request = chain.request().newBuilder()
+            val requestBuilder = chain.request().newBuilder()
                 .addHeader("Accept", "application/json")
-                .build()
-            chain.proceed(request)
+
+            // Tambahkan Authorization header jika token tersedia
+            authToken?.let { token ->
+                requestBuilder.addHeader("Authorization", "Bearer $token")
+            }
+
+            chain.proceed(requestBuilder.build())
         }
         .build()
 

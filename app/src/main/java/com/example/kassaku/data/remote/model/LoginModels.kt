@@ -12,7 +12,8 @@ data class UserContent(
     @SerializedName("id_user") val idUser: Int,
     @SerializedName("username") val username: String,
     @SerializedName("role") val role: String,
-    @SerializedName("active") val active: String
+    @SerializedName("active") val active: String,
+    @SerializedName("token") val token: String? = null
 )
 
 data class BlockedContent(

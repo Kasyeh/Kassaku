@@ -257,8 +257,11 @@ fun KasSakuApp(homeViewModel: HomeViewModel, onSyncFCM: (Int?) -> Unit) {
                     val sharedPref = context.getSharedPreferences("KassakuPrefs", Context.MODE_PRIVATE)
                     val userId = sharedPref.getInt("user_id", -1)
                     val isRemembered = sharedPref.getBoolean("remember_me", false)
+                    val savedToken = sharedPref.getString("auth_token", null)
                     
-                    if (userId != -1 && isRemembered) {
+                    if (userId != -1 && isRemembered && savedToken != null) {
+                        // Restore token ke ApiClient
+                        com.example.kassaku.data.remote.ApiClient.setToken(savedToken)
                         navController.navigate("${AppDestinations.MAIN_APP_ROUTE}/$userId") {
                             popUpTo(AppDestinations.SPLASH_ROUTE) { inclusive = true }
                         }
@@ -273,11 +276,13 @@ fun KasSakuApp(homeViewModel: HomeViewModel, onSyncFCM: (Int?) -> Unit) {
         composable(AppDestinations.LOGIN_ROUTE) {
             LoginScreen(
                 onLoginSuccess = { userId, rememberMe ->
-                    // Simpan userId ke SharedPreferences agar Service bisa baca
+                    // Simpan userId dan token ke SharedPreferences
                     val sharedPref = context.getSharedPreferences("KassakuPrefs", Context.MODE_PRIVATE)
+                    val token = com.example.kassaku.data.remote.ApiClient.getToken()
                     sharedPref.edit()
                         .putInt("user_id", userId)
                         .putBoolean("remember_me", rememberMe)
+                        .putString("auth_token", token)
                         .apply()
                     
                     // Trigger sync token
@@ -299,9 +304,13 @@ fun KasSakuApp(homeViewModel: HomeViewModel, onSyncFCM: (Int?) -> Unit) {
         composable(AppDestinations.REGISTER_ROUTE) {
             com.example.kassaku.ui.RegisterScreen(
                 onRegisterSuccess = { userId ->
-                    // Simpan userId ke SharedPreferences
+                    // Simpan userId dan token ke SharedPreferences
                     val sharedPref = context.getSharedPreferences("KassakuPrefs", Context.MODE_PRIVATE)
-                    sharedPref.edit().putInt("user_id", userId).apply()
+                    val token = com.example.kassaku.data.remote.ApiClient.getToken()
+                    sharedPref.edit()
+                        .putInt("user_id", userId)
+                        .putString("auth_token", token)
+                        .apply()
                     
                     // Trigger sync token
                     onSyncFCM(userId)
@@ -330,9 +339,10 @@ fun KasSakuApp(homeViewModel: HomeViewModel, onSyncFCM: (Int?) -> Unit) {
                     userId = userId,
                     homeViewModel = homeViewModel,
                     onLogout = { reason ->
-                        // Clear SharedPreferences
+                        // Clear SharedPreferences dan token
                         val sharedPref = context.getSharedPreferences("KassakuPrefs", Context.MODE_PRIVATE)
-                        sharedPref.edit().remove("user_id").remove("remember_me").apply()
+                        sharedPref.edit().remove("user_id").remove("remember_me").remove("auth_token").apply()
+                        com.example.kassaku.data.remote.ApiClient.clearToken()
 
                         if (reason == com.example.kassaku.viewmodel.LogoutReason.BLOCKED) {
                            Toast.makeText(context, "Akun Anda telah dinonaktifkan oleh admin", Toast.LENGTH_LONG).show()
@@ -411,7 +421,16 @@ fun MainAppScreen(userId: Int, homeViewModel: HomeViewModel, onLogout: (com.exam
                 StatistikScreen(
                     userId = userId,
                     homeViewModel = homeViewModel,
-                    onLogout = { onLogout(com.example.kassaku.viewmodel.LogoutReason.MANUAL) }
+                    onLogout = { onLogout(com.example.kassaku.viewmodel.LogoutReason.MANUAL) },
+                    onNavigateToImpian = {
+                        bottomNavController.navigate(BottomNavItem.Impian.route) {
+                            popUpTo(bottomNavController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
                 )
             }
             composable(BottomNavItem.Profil.route) {

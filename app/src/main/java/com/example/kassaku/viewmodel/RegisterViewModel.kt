@@ -21,7 +21,7 @@ sealed interface RegisterUiState {
 class RegisterViewModel(
     private val authRepository: AuthRepository = AuthRepository(ApiClient.api)
 ) : ViewModel() {
-    
+
     var registerUiState: RegisterUiState by mutableStateOf(RegisterUiState.Idle)
         private set
 
@@ -30,7 +30,7 @@ class RegisterViewModel(
             registerUiState = RegisterUiState.Error("Semua field harus diisi")
             return
         }
-        
+
         if (password.length < 8) {
             registerUiState = RegisterUiState.Error("Password minimal 8 karakter")
             return
@@ -47,7 +47,7 @@ class RegisterViewModel(
         viewModelScope.launch {
             try {
                 val result = authRepository.register(username, password)
-                
+
                 result.fold(
                     onSuccess = { user ->
                         registerUiState = RegisterUiState.Success(user)
@@ -59,8 +59,8 @@ class RegisterViewModel(
                         }
                     }
                 )
-            } catch (e: Exception) {
-                registerUiState = RegisterUiState.Error("Terjadi kesalahan: ${e.message}")
+            } catch (_: Exception) {
+                registerUiState = RegisterUiState.Error("Terjadi kesalahan saat registrasi")
             }
         }
     }

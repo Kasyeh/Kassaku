@@ -65,4 +65,59 @@ class RealtimeDatabaseRepository {
             statusRef.removeEventListener(listener)
         }
     }
+
+    /**
+     * Data class for unblock response from admin
+     */
+    data class UnblockResponseData(
+        val status: String,
+        val message: String?,
+        val timestamp: Long
+    )
+
+    /**
+     * Listen to unblock response from admin in real-time
+     * Admin writes to this RTDB node when they approve/reject an unblock request
+     */
+    fun getUnblockResponseFlow(userId: Int): Flow<UnblockResponseData?> = callbackFlow {
+        val responseRef = database.getReference("users/$userId/unblock_response")
+
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                if (!snapshot.exists()) {
+                    trySend(null)
+                    return
+                }
+                val status = snapshot.child("status").getValue(String::class.java)
+                val message = snapshot.child("message").getValue(String::class.java)
+                val timestamp = snapshot.child("timestamp").getValue(Long::class.java) ?: 0
+                if (status != null) {
+                    Log.d(TAG, "Unblock response received: status=$status, message=$message")
+                    trySend(UnblockResponseData(status, message, timestamp))
+                } else {
+                    trySend(null)
+                }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(TAG, "Unblock response listener cancelled: ${error.message}")
+                close(error.toException())
+            }
+        }
+
+        responseRef.addValueEventListener(listener)
+
+        awaitClose {
+            responseRef.removeEventListener(listener)
+        }
+    }
+
+    /**
+     * Clear unblock response after user has acknowledged it
+     */
+    fun clearUnblockResponse(userId: Int) {
+        database.getReference("users/$userId/unblock_response").removeValue()
+            .addOnSuccessListener { Log.d(TAG, "Unblock response cleared for user $userId") }
+            .addOnFailureListener { Log.e(TAG, "Failed to clear unblock response: ${it.message}") }
+    }
 }

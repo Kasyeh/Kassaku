@@ -204,6 +204,8 @@ fun RegisterScreen(
                                     .height(56.dp),
                                 shape = RoundedCornerShape(16.dp),
                                 colors = TextFieldDefaults.colors(
+                                    focusedTextColor = textPrimary,
+                                    unfocusedTextColor = textPrimary,
                                     focusedContainerColor = if(isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.05f),
                                     unfocusedContainerColor = if(isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.05f),
                                     focusedIndicatorColor = Color.Transparent,
@@ -235,6 +237,8 @@ fun RegisterScreen(
                                     }
                                 },
                                 colors = TextFieldDefaults.colors(
+                                    focusedTextColor = textPrimary,
+                                    unfocusedTextColor = textPrimary,
                                     focusedContainerColor = if(isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.05f),
                                     unfocusedContainerColor = if(isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.05f),
                                     focusedIndicatorColor = Color.Transparent,
@@ -242,7 +246,7 @@ fun RegisterScreen(
                                     cursorColor = primaryColor
                                 ),
                                 singleLine = true,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Done),
                                 keyboardActions = KeyboardActions(onDone = {
                                     if (isFormValid) {
                                         focusManager.clearFocus()
@@ -259,7 +263,7 @@ fun RegisterScreen(
                                 RequirementItem("Minimal 8 karakter", hasMinLength, isDark)
                                 RequirementItem("Huruf Kapital", hasUppercase, isDark)
                                 RequirementItem("Angka", hasDigit, isDark)
-                                RequirementItem("Simbol (!@#$%^&*)", hasSymbol, isDark)
+                                RequirementItem("Simbol (!@#\$%^&*_)", hasSymbol, isDark)
                                 if (password.any { it.isWhitespace() }) {
                                     RequirementItem("Tidak mengandung spasi", hasNoSpace, isDark)
                                 }

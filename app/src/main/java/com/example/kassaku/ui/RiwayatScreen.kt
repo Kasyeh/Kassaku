@@ -76,10 +76,16 @@ import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.abs
-import com.example.kassaku.ui.components.skeleton.SkeletonTransactionList
 import com.example.kassaku.utils.formatMillisToString
 import com.example.kassaku.utils.savePdfToDownloads
 import com.example.kassaku.utils.openPdfFile
+import com.example.kassaku.utils.formatDisplayDate
+import com.example.kassaku.utils.formatDisplayTime
+import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Remove
+import com.example.kassaku.ui.components.skeleton.SkeletonTransactionList
 
 @Composable
 fun RiwayatScreen(
@@ -364,7 +370,9 @@ fun RiwayatScreen(
                         if (filteredItems.isEmpty()) {
                             EmptyState(message = "Tidak ada transaksi", subMessage = "Belum ada data untuk ditampilkan")
                         } else {
-                            val groupedItems = filteredItems.groupBy { it.tanggal ?: "Tidak Diketahui" }
+                            val groupedItems = filteredItems.groupBy { 
+                                it.tanggal?.split(" ")?.get(0) ?: "Tidak Diketahui" 
+                            }
 
                             LazyColumn(
                                 contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
@@ -578,7 +586,7 @@ fun RiwayatItemRow(
 ) {
     val isIncome = item.tipe?.equals("pemasukan", ignoreCase = true) == true
     val amountColor = if (isIncome) StitchPrimary else StitchNegative
-    val icon = if (isIncome) Icons.Default.TrendingUp else Icons.Default.TrendingDown
+    val icon = if (isIncome) Icons.Rounded.Add else Icons.Rounded.Remove
     val iconBgColor = if (isIncome) StitchPrimaryLight else Color(0x33EF4444)
     val iconTint = if (isIncome) StitchPrimary else StitchNegative
     
@@ -587,6 +595,9 @@ fun RiwayatItemRow(
     }
     val formattedAmount = numberFormatter.format(abs(item.nominal ?: 0.0))
     val sign = if (isIncome) "+ " else "- "
+    
+    val dateDisplay = formatDisplayDate(item.tanggal ?: "")
+    val timeDisplay = formatDisplayTime(item.tanggal)
 
     Row(
         modifier = Modifier
@@ -619,7 +630,7 @@ fun RiwayatItemRow(
                 color = if(isDark) Color.White else StitchTextPrimary
             )
             Text(
-                text = "${if (isIncome) "Pemasukan" else "Pengeluaran"} • ${item.keterangan ?: "-"}",
+                text = "${if (isIncome) "Pemasukan" else "Pengeluaran"} • $timeDisplay • ${item.keterangan ?: "-"}",
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Medium,
                 color = if(isDark) Color(0xFF94A3B8) else StitchTextSecondary,
@@ -668,17 +679,6 @@ fun EmptyState(message: String, subMessage: String) {
             style = MaterialTheme.typography.bodyMedium,
             color = StitchTextSecondary
         )
-    }
-}
-
-fun formatDisplayDate(dateString: String): String {
-    return try {
-        val inputFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        val date = inputFormat.parse(dateString)
-        val outputFormat = SimpleDateFormat("dd MMMM yyyy", Locale("id", "ID"))
-        outputFormat.format(date ?: Date())
-    } catch (e: Exception) {
-        dateString
     }
 }
 

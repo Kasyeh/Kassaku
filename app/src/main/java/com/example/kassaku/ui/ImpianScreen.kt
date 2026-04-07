@@ -19,7 +19,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.CardGiftcard
+import androidx.compose.material.icons.filled.Paid
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Image
@@ -47,6 +47,7 @@ import com.example.kassaku.viewmodel.HomeViewModel
 import com.example.kassaku.viewmodel.ImpianUiState
 import com.example.kassaku.viewmodel.TambahImpianResult
 import com.example.kassaku.viewmodel.HapusImpianResult
+import com.example.kassaku.viewmodel.SetorImpianResult
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import kotlinx.coroutines.flow.collectLatest
@@ -74,6 +75,8 @@ fun ImpianScreen(
     var showHapusDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
     var impianToDelete by remember { mutableStateOf<ImpianItem?>(null) }
+    var impianToSetor by remember { mutableStateOf<ImpianItem?>(null) }
+    var showSetorDialog by remember { mutableStateOf(false) }
 
     // Colors
     val backgroundColor = if (isDark) StitchBackgroundDark else StitchBackgroundLight
@@ -115,6 +118,25 @@ fun ImpianScreen(
                     is HapusImpianResult.Error -> {
                         Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
                         homeViewModel.resetHapusImpianResult()
+                    }
+                    else -> {}
+                }
+            }
+        }
+    }
+
+    // Handle setor impian result
+    LaunchedEffect(key1 = homeViewModel) {
+        launch {
+            homeViewModel.setorImpianResult.collectLatest { result ->
+                when (result) {
+                    is SetorImpianResult.Success -> {
+                        Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
+                        homeViewModel.resetSetorImpianResult()
+                    }
+                    is SetorImpianResult.Error -> {
+                        Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
+                        homeViewModel.resetSetorImpianResult()
                     }
                     else -> {}
                 }
@@ -206,6 +228,10 @@ fun ImpianScreen(
                                         impianToDelete = item
                                         showHapusDialog = true 
                                     },
+                                    onSetorClick = {
+                                        impianToSetor = item
+                                        showSetorDialog = true
+                                    },
                                     isDark = isDark,
                                     surfaceColor = surfaceColor
                                 )
@@ -247,12 +273,12 @@ fun ImpianScreen(
         if (showTambahDialog) {
             TambahImpianDialog(
                 onDismissRequest = { showTambahDialog = false },
-                onConfirm = { namaBarang, hargaBarang, deadline, imageUri ->
+                onConfirm = { namaBarang, hargaBarang, deadline, keterangan, imageUri ->
                     showTambahDialog = false
                     val fotoBarang = imageUri?.let { uri ->
                         createMultipartFromUri(context, uri, "foto_barang")
                     }
-                    homeViewModel.tambahImpian(userId, namaBarang, hargaBarang, deadline, fotoBarang)
+                    homeViewModel.tambahImpian(userId, namaBarang, hargaBarang, deadline, keterangan, fotoBarang)
                 }
             )
         }
@@ -284,15 +310,34 @@ fun ImpianScreen(
                 isDark = isDark
             )
         }
+
+        if (showSetorDialog) {
+            SetorImpianDialog(
+                item = impianToSetor,
+                onDismissRequest = {
+                    showSetorDialog = false
+                    impianToSetor = null
+                },
+                onConfirm = { nominal, keterangan ->
+                    val target = impianToSetor
+                    if (target != null) {
+                        homeViewModel.setorImpian(target.idImpian, userId, nominal, keterangan)
+                    }
+                    showSetorDialog = false
+                    impianToSetor = null
+                }
+            )
+        }
         }
     }
 }
 
 @Composable
 fun ImpianItemRow(
-    item: ImpianItem, 
+    item: ImpianItem,
     onClick: (ImpianItem) -> Unit,
     onDeleteClick: (ImpianItem) -> Unit,
+    onSetorClick: (ImpianItem) -> Unit,
     isDark: Boolean,
     surfaceColor: Color
 ) {
@@ -300,79 +345,179 @@ fun ImpianItemRow(
         maximumFractionDigits = 0
     }
     val formattedPrice = numberFormatter.format(item.hargaBarang ?: 0)
-    
+
+    val progressValue = ((item.persentaseProgress ?: 0.0) / 100.0).toFloat().coerceIn(0f, 1f)
+    val danaTerkumpul = item.danaTerkumpul ?: 0L
+    val sisaTarget = item.sisaTarget ?: 0L
+    val isTargetTercapai = item.isTercapai == true
+
     Card(
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = surfaceColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, if(isDark) Color(0xFF334155) else Color(0xFFF1F5F9), RoundedCornerShape(20.dp))
+            .border(
+                1.dp,
+                if (isDark) Color(0xFF334155) else Color(0xFFF1F5F9),
+                RoundedCornerShape(24.dp)
+            )
             .clickable { onClick(item) }
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Image Box (Equivalent to Icon box in Riwayat)
-            AsyncImage(
-                model = "http://10.0.2.2:8000/storage/${item.fotoBarang}",
-                contentDescription = item.namaBarang,
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Color.Gray.copy(alpha = 0.1f)),
-                contentScale = ContentScale.Crop,
-                placeholder = painterResource(id = android.R.drawable.ic_menu_gallery),
-                error = painterResource(id = android.R.drawable.ic_menu_report_image)
-            )
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = item.namaBarang ?: "Tanpa Nama",
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = if(isDark) Color.White else StitchTextPrimary,
-                    maxLines = 1
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.CalendarToday,
-                        contentDescription = null,
-                        tint = StitchTextSecondary,
-                        modifier = Modifier.size(12.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = formatDate(item.deadline),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = StitchTextSecondary
-                    )
-                }
-            }
-
-            Text(
-                text = "Rp $formattedPrice",
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Bold,
-                color = StitchPrimary
-            )
-
-            Spacer(modifier = Modifier.width(8.dp))
-
+        Box(modifier = Modifier.fillMaxWidth()) {
+            // Delete Button at Top-Right
             IconButton(
                 onClick = { onDeleteClick(item) },
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.error.copy(alpha = 0.1f))
             ) {
                 Icon(
                     imageVector = Icons.Default.Delete,
                     contentDescription = "Hapus",
                     tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(16.dp)
                 )
+            }
+
+            Column(modifier = Modifier.padding(20.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Larger Image
+                    AsyncImage(
+                        model = "http://10.0.2.2:8000/storage/${item.fotoBarang}",
+                        contentDescription = item.namaBarang,
+                        modifier = Modifier
+                            .size(72.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color.Gray.copy(alpha = 0.1f)),
+                        contentScale = ContentScale.Crop,
+                        placeholder = painterResource(id = android.R.drawable.ic_menu_gallery),
+                        error = painterResource(id = android.R.drawable.ic_menu_report_image)
+                    )
+
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = item.namaBarang ?: "Tanpa Nama",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isDark) Color.White else StitchTextPrimary,
+                            maxLines = 1
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.CalendarToday,
+                                contentDescription = null,
+                                tint = StitchTextSecondary,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = formatDate(item.deadline),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = StitchTextSecondary
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Rp $formattedPrice",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = StitchPrimary
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Progress Section
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    LinearProgressIndicator(
+                        progress = { progressValue },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(10.dp)
+                            .clip(CircleShape),
+                        color = if (isTargetTercapai) Color(0xFF10B981) else StitchPrimary,
+                        trackColor = if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text(
+                                text = "Terkumpul",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = StitchTextSecondary
+                            )
+                            Text(
+                                text = "Rp ${numberFormatter.format(danaTerkumpul)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isDark) Color.White else StitchTextPrimary
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = "Sisa Target",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = StitchTextSecondary
+                            )
+                            Text(
+                                text = "Rp ${numberFormatter.format(sisaTarget)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isTargetTercapai) Color(0xFF10B981) else StitchNegative
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Action Button
+                if (isTargetTercapai) {
+                    Surface(
+                        color = Color(0xFF10B981).copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Target Tercapai! 🎉",
+                            modifier = Modifier.padding(vertical = 10.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF10B981),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                } else {
+                    Button(
+                        onClick = { onSetorClick(item) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = StitchPrimary),
+                        contentPadding = PaddingValues(vertical = 12.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Setor Dana",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
             }
         }
     }
@@ -389,7 +534,7 @@ fun EmptyImpianView() {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Icon(
-                imageVector = Icons.Default.CardGiftcard,
+                imageVector = Icons.Default.Paid,
                 contentDescription = null,
                 modifier = Modifier.size(80.dp),
                 tint = StitchTextSecondary.copy(alpha = 0.5f)
@@ -415,6 +560,10 @@ fun ImpianDetailDialog(item: ImpianItem, onDismissRequest: () -> Unit) {
         maximumFractionDigits = 0
     }
     val formattedPrice = numberFormatter.format(item.hargaBarang ?: 0)
+    val danaTerkumpul = numberFormatter.format(item.danaTerkumpul ?: 0)
+    val sisaTarget = numberFormatter.format(item.sisaTarget ?: 0)
+    val progress = item.persentaseProgress ?: 0.0
+    val statusText = if (item.isTercapai == true) "Target Tercapai" else "Sedang Menabung"
 
     AlertDialog(
         onDismissRequest = onDismissRequest,
@@ -463,6 +612,36 @@ fun ImpianDetailDialog(item: ImpianItem, onDismissRequest: () -> Unit) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "Catatan",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = item.keterangan ?: "Tidak ada catatan tambahan.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "Progress Nyata",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "Rp $danaTerkumpul / Rp $formattedPrice",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = StitchPrimary
+                    )
+                    Text(
+                        text = "Sisa target: Rp $sisaTarget • ${"%.1f".format(progress)}% • $statusText",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         },
         confirmButton = {
@@ -489,11 +668,12 @@ fun formatDate(dateString: String?): String {
 @Composable
 fun TambahImpianDialog(
     onDismissRequest: () -> Unit,
-    onConfirm: (namaBarang: String, hargaBarang: Int, deadline: String, fotoBarang: Uri?) -> Unit
+    onConfirm: (namaBarang: String, hargaBarang: Long, deadline: String, keterangan: String?, fotoBarang: Uri?) -> Unit
 ) {
     var namaBarang by remember { mutableStateOf("") }
     var hargaBarang by remember { mutableStateOf("") }
     var deadline by remember { mutableStateOf("") }
+    var keterangan by remember { mutableStateOf("") }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var isNamaError by remember { mutableStateOf(false) }
     var isHargaError by remember { mutableStateOf(false) }
@@ -610,6 +790,17 @@ fun TambahImpianDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                // Keterangan (opsional)
+                OutlinedTextField(
+                    value = keterangan,
+                    onValueChange = { keterangan = it },
+                    label = { Text("Keterangan (Opsional)") },
+                    placeholder = { Text("Catatan tambahan untuk impian") },
+                    minLines = 2,
+                    maxLines = 4,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
                 // Deadline
                 OutlinedTextField(
                     value = deadline,
@@ -636,12 +827,13 @@ fun TambahImpianDialog(
             Button(
                 onClick = {
                     isNamaError = namaBarang.isBlank()
-                    isHargaError = hargaBarang.toIntOrNull() == null || hargaBarang.toInt() <= 0
+                    val priceLong = hargaBarang.toLongOrNull()
+                    isHargaError = priceLong == null || priceLong <= 0
                     isDeadlineError = deadline.isBlank()
                     isImageError = selectedImageUri == null
 
                     if (!isNamaError && !isHargaError && !isDeadlineError && !isImageError) {
-                        onConfirm(namaBarang, hargaBarang.toInt(), deadline, selectedImageUri)
+                        onConfirm(namaBarang, priceLong ?: 0L, deadline, keterangan.takeIf { it.isNotBlank() }, selectedImageUri)
                     }
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = StitchPrimary)
@@ -715,6 +907,84 @@ fun createMultipartFromUri(context: Context, uri: Uri, partName: String): okhttp
         android.util.Log.e("ImpianScreen", "Error creating multipart: ${e.message}", e)
         null
     }
+}
+
+@Composable
+fun SetorImpianDialog(
+    item: ImpianItem?,
+    onDismissRequest: () -> Unit,
+    onConfirm: (nominal: Long, keterangan: String?) -> Unit
+) {
+    val formatter = NumberFormat.getNumberInstance(Locale("id", "ID")).apply {
+        maximumFractionDigits = 0
+    }
+    var nominalInput by remember { mutableStateOf("") }
+    var keterangan by remember { mutableStateOf("") }
+    var isNominalError by remember { mutableStateOf(false) }
+    val sisaTarget = item?.sisaTarget ?: 0L
+
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        title = { Text(text = "Setor Impian", fontWeight = FontWeight.SemiBold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = item?.namaBarang ?: "-",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Sisa target: Rp ${formatter.format(sisaTarget)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = nominalInput,
+                    onValueChange = { value ->
+                        nominalInput = value.filter { it.isDigit() }
+                        isNominalError = false
+                    },
+                    label = { Text("Nominal Setoran") },
+                    prefix = { Text("Rp") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    visualTransformation = ThousandSeparatorVisualTransformation(),
+                    isError = isNominalError,
+                    supportingText = {
+                        if (isNominalError) Text("Nominal tidak valid atau melebihi sisa target")
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = keterangan,
+                    onValueChange = { keterangan = it },
+                    label = { Text("Keterangan (Opsional)") },
+                    minLines = 2,
+                    maxLines = 4,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val nominal = nominalInput.toLongOrNull() ?: 0L
+                    isNominalError = nominal <= 0L || nominal > sisaTarget
+                    if (!isNominalError) {
+                        onConfirm(nominal, keterangan.takeIf { it.isNotBlank() })
+                    }
+                },
+                enabled = item != null && sisaTarget > 0
+            ) {
+                Text("Simpan")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismissRequest) {
+                Text("Batal")
+            }
+        }
+    )
 }
 
 @Composable

@@ -90,13 +90,18 @@ fun TransactionFormSheet(
     formState: TransactionFormState,
     onDismiss: () -> Unit,
     onSubmit: (TransactionFormData) -> Unit,
+    customCategories: List<com.example.kassaku.ui.components.form.CategoryOption>? = null,
     sheetState: SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 ) {
     if (!isVisible) return
     
     val accentColor = if (isExpense) StitchAccentRed else StitchPrimary
     val title = if (isExpense) "Tambah Pengeluaran" else "Tambah Pemasukan"
-    val categories = if (isExpense) ExpenseCategories.list else IncomeCategories.list
+    val categories = if (isExpense) {
+        customCategories ?: ExpenseCategories.list
+    } else {
+        IncomeCategories.list
+    }
     
     // Form fields
     var amount by remember { mutableStateOf("") }
@@ -211,6 +216,55 @@ fun TransactionFormSheet(
                 enabled = !isSubmitting
             )
             
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Quick nominal presets (sync with web)
+            Text(
+                text = "Nominal cepat:",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = StitchTextSecondary,
+                modifier = Modifier.padding(start = 4.dp)
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            val quickAmounts = listOf(10000L, 20000L, 50000L, 100000L, 200000L, 500000L)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                quickAmounts.chunked(3).forEach { rowItems ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        rowItems.forEach { nominalCepat ->
+                            Button(
+                                onClick = {
+                                    if (!isSubmitting) {
+                                        amount = nominalCepat.toString()
+                                        amountError = null
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    }
+                                },
+                                modifier = Modifier.weight(1f),
+                                enabled = !isSubmitting,
+                                shape = RoundedCornerShape(16.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = accentColor.copy(alpha = 0.12f),
+                                    contentColor = accentColor
+                                ),
+                                elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
+                            ) {
+                                Text(
+                                    text = "Rp ${String.format("%,d", nominalCepat).replace(',', '.')}",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(20.dp))
             
             // Category Input (Text Input as requested)

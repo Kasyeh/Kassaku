@@ -20,6 +20,33 @@ fun formatMillisToString(millis: Long): String {
     return formatter.format(Date(millis))
 }
 
+fun formatDisplayDate(dateString: String): String {
+    return try {
+        // Handle both "yyyy-MM-dd" and "yyyy-MM-dd HH:mm:ss"
+        val cleanDate = dateString.split(" ")[0]
+        val inputFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val date = inputFormat.parse(cleanDate)
+        val outputFormat = SimpleDateFormat("dd MMMM yyyy", Locale("id", "ID"))
+        outputFormat.format(date ?: Date())
+    } catch (e: Exception) {
+        dateString
+    }
+}
+
+fun formatDisplayTime(dateString: String?): String {
+    if (dateString == null) return "--:--"
+    return try {
+        if (dateString.contains(" ")) {
+            val timePart = dateString.split(" ")[1]
+            timePart.substring(0, 5) // HH:mm
+        } else {
+            "--:--"
+        }
+    } catch (e: Exception) {
+        "--:--"
+    }
+}
+
 fun savePdfToDownloads(context: Context, pdfBytes: ByteArray, fileName: String): Uri? {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         val contentValues = ContentValues().apply {

@@ -3,6 +3,7 @@ package com.example.kassaku.data.repository
 import com.example.kassaku.data.remote.ApiService
 import com.example.kassaku.data.remote.model.ImpianItem
 import com.example.kassaku.data.remote.model.ImpianResponse
+import com.example.kassaku.data.remote.model.SetorImpianResponse
 import com.example.kassaku.data.remote.model.TambahImpianResponse
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
@@ -51,8 +52,9 @@ class ImpianRepository(private val apiService: ApiService) {
     suspend fun tambahImpian(
         userId: Int,
         namaBarang: String,
-        hargaBarang: Int,
+        hargaBarang: Long,
         deadline: String,
+        keterangan: String?,
         fotoBarang: MultipartBody.Part?
     ): Result<String> {
         return try {
@@ -66,12 +68,14 @@ class ImpianRepository(private val apiService: ApiService) {
             val namaBarangBody = namaBarang.toRequestBody("text/plain".toMediaTypeOrNull())
             val hargaBarangBody = hargaBarang.toString().toRequestBody("text/plain".toMediaTypeOrNull())
             val deadlineBody = deadline.toRequestBody("text/plain".toMediaTypeOrNull())
-            
+            val keteranganBody = if (keterangan.isNullOrBlank()) null else keterangan.toRequestBody("text/plain".toMediaTypeOrNull())
+
             val response: Response<TambahImpianResponse> = apiService.tambahImpian(
                 idUser = userIdBody,
                 namaBarang = namaBarangBody,
                 hargaBarang = hargaBarangBody,
                 deadline = deadlineBody,
+                keterangan = keteranganBody,
                 fotoBarang = fotoBarang
             )
             
@@ -110,6 +114,37 @@ class ImpianRepository(private val apiService: ApiService) {
             }
         } catch (e: Exception) {
             android.util.Log.e("ImpianRepo", "Exception deleting impian: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Setor dana ke impian tertentu.
+     */
+    suspend fun setorImpian(
+        idImpian: Long,
+        userId: Int,
+        nominal: Long,
+        keterangan: String?
+    ): Result<String> {
+        return try {
+            val response: Response<SetorImpianResponse> = apiService.setorImpian(
+                idImpian = idImpian,
+                idUser = userId,
+                nominal = nominal,
+                keterangan = keterangan,
+                tanggal = null
+            )
+
+            if (response.isSuccessful && response.body()?.success == true) {
+                Result.success(response.body()?.message ?: "Setoran impian berhasil disimpan")
+            } else {
+                val errorBody = response.errorBody()?.string()
+                android.util.Log.e("ImpianRepo", "Error setor impian: ${response.code()} - $errorBody")
+                Result.failure(Exception("Gagal setor impian: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ImpianRepo", "Exception setor impian: ${e.message}", e)
             Result.failure(e)
         }
     }

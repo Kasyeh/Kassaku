@@ -71,6 +71,8 @@ fun LoginScreen(
     var blockedInfo by remember { mutableStateOf<LoginUiState.Blocked?>(null) }
     var unblockPesan by remember { mutableStateOf("") }
     val unblockUiState = loginViewModel.unblockUiState
+    val unblockResponse by loginViewModel.unblockResponseState.collectAsState()
+    var showUnblockResponseDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
@@ -109,11 +111,27 @@ fun LoginScreen(
                 showBlockedDialog = true
                 // Sync token even if blocked so admin can notify
                 onSyncFCM(loginUiState.idUser)
+                // Start listening for admin's unblock response via RTDB
+                loginViewModel.startListeningUnblockResponse(loginUiState.idUser)
             }
             LoginUiState.Idle, LoginUiState.Loading -> {
                 errorMessage = null
                 showBlockedDialog = false
             }
+        }
+    }
+
+    // Listen for realtime unblock response from admin
+    LaunchedEffect(unblockResponse) {
+        unblockResponse?.let { response ->
+            showUnblockResponseDialog = true
+        }
+    }
+
+    // Clean up RTDB listener when leaving screen
+    DisposableEffect(Unit) {
+        onDispose {
+            loginViewModel.stopListeningUnblockResponse()
         }
     }
 
@@ -527,6 +545,69 @@ fun LoginScreen(
                                 loginViewModel.resetLoginState()
                             }) {
                                 Text("Batal", color = textSecondary)
+                            }
+                        },
+                        containerColor = if (isDark) Color(0xFF1E1E2D) else Color.White,
+                        shape = RoundedCornerShape(28.dp)
+                    )
+                }
+
+                // Realtime Unblock Response Dialog from Admin
+                if (showUnblockResponseDialog && unblockResponse != null) {
+                    val isApproved = unblockResponse?.status == "approved"
+                    AlertDialog(
+                        onDismissRequest = {
+                            showUnblockResponseDialog = false
+                            blockedInfo?.let { loginViewModel.acknowledgeUnblockResponse(it.idUser) }
+                            if (isApproved) {
+                                showBlockedDialog = false
+                                loginViewModel.resetLoginState()
+                            }
+                        },
+                        icon = {
+                            Icon(
+                                imageVector = if (isApproved) Icons.Default.Lock else Icons.Default.Error,
+                                contentDescription = null,
+                                tint = if (isApproved) StitchPrimary else StitchNegative,
+                                modifier = Modifier.size(48.dp)
+                            )
+                        },
+                        title = {
+                            Text(
+                                text = if (isApproved) "🎉 Permintaan Disetujui!" else "❌ Permintaan Ditolak",
+                                fontWeight = FontWeight.Bold,
+                                color = textPrimary
+                            )
+                        },
+                        text = {
+                            Text(
+                                text = unblockResponse?.message ?: if (isApproved)
+                                    "Akun Anda sudah aktif kembali. Silakan login ulang."
+                                else
+                                    "Permintaan unblock Anda ditolak oleh admin.",
+                                color = textSecondary,
+                                fontSize = 14.sp
+                            )
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    showUnblockResponseDialog = false
+                                    blockedInfo?.let { loginViewModel.acknowledgeUnblockResponse(it.idUser) }
+                                    if (isApproved) {
+                                        showBlockedDialog = false
+                                        loginViewModel.resetLoginState()
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isApproved) StitchPrimary else StitchNegative
+                                ),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text(
+                                    text = if (isApproved) "Login Sekarang" else "Tutup",
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                         },
                         containerColor = if (isDark) Color(0xFF1E1E2D) else Color.White,

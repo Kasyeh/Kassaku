@@ -13,12 +13,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.CardGiftcard
+import androidx.compose.material.icons.filled.Paid
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.rounded.AccountCircle
-import androidx.compose.material.icons.rounded.CardGiftcard
+import androidx.compose.material.icons.rounded.Paid
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.PieChart
@@ -68,8 +68,8 @@ sealed class BottomNavItem(
     object Impian : BottomNavItem(
         route = AppDestinations.IMPIAN_ROUTE, 
         title = "Impian", 
-        selectedIcon = Icons.Rounded.CardGiftcard,
-        unselectedIcon = Icons.Filled.CardGiftcard
+        selectedIcon = Icons.Rounded.Paid,
+        unselectedIcon = Icons.Filled.Paid
     )
     object Statistik : BottomNavItem(
         route = AppDestinations.STATISTIK_ROUTE, 
@@ -107,9 +107,9 @@ fun KassakuBottomBar(
 ) {
     val items = listOf(
         BottomNavItem.Home,
+        BottomNavItem.Riwayat,
         BottomNavItem.Impian,
         BottomNavItem.Statistik,
-        BottomNavItem.Riwayat,
         BottomNavItem.Profil
     )
 
