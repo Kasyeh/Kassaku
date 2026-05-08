@@ -96,7 +96,7 @@ fun TransactionFormSheet(
     if (!isVisible) return
     
     val accentColor = if (isExpense) StitchAccentRed else StitchPrimary
-    val title = if (isExpense) "Tambah Pengeluaran" else "Tambah Pemasukan"
+    val title = if (isExpense) "Tambah Uang Keluar" else "Tambah Uang Masuk"
     val categories = if (isExpense) {
         customCategories ?: ExpenseCategories.list
     } else {
@@ -220,7 +220,7 @@ fun TransactionFormSheet(
 
             // Quick nominal presets (sync with web)
             Text(
-                text = "Nominal cepat:",
+                text = "Pilih jumlah:",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 color = StitchTextSecondary,
@@ -275,7 +275,7 @@ fun TransactionFormSheet(
                     categoryError = null
                 },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Kategori") },
+                label = { Text("Jenis") },
                 placeholder = { Text("Contoh: Gaji, Makan, Transport") },
                 singleLine = true,
                 enabled = !isSubmitting,
@@ -321,7 +321,7 @@ fun TransactionFormSheet(
                 value = notes,
                 onValueChange = { notes = it },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Keterangan (opsional)") },
+                label = { Text("Catatan (opsional)") },
                 placeholder = { Text("Contoh: Makan siang kantor") },
                 singleLine = true,
                 enabled = !isSubmitting
@@ -370,12 +370,12 @@ fun TransactionFormSheet(
                     var hasError = false
                     
                     if (amountValue <= 0) {
-                        amountError = "Nominal harus lebih dari 0"
+                        amountError = "Jumlah harus lebih dari 0"
                         hasError = true
                     }
                     
                     if (categoryText.isBlank()) {
-                        categoryError = "Isi kategori"
+                        categoryError = "Isi jenis"
                         hasError = true
                     }
                     

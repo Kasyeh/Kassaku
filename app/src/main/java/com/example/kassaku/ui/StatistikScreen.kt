@@ -157,10 +157,10 @@ private fun resolveCashflowUiState(series: CashflowPeriodData): CashflowChartUiS
 private fun isDailyCashflowPeriod(periodKey: String): Boolean = periodKey == "7d" || periodKey == "30d"
 
 private fun safeSelectedIndex(labels: List<String>, currentIndex: Int): Int {
-    if (labels.isEmpty()) {
+    if (labels.isEmpty() || currentIndex < 0) {
         return -1
     }
-    return currentIndex.coerceIn(0, labels.lastIndex)
+    return currentIndex.coerceAtMost(labels.lastIndex)
 }
 
 private fun formatSignedPercent(value: Double): String {
@@ -236,7 +236,7 @@ fun StatistikScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Statistik",
+                        text = "Ringkasan",
                         color = textPrimary,
                         style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold)
                     )
@@ -416,7 +416,7 @@ fun SmoothLineChart(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Grafik Performa",
+                    text = "Grafik Perkembangan",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = if (isDark) Color.White else iOSLabelLight
@@ -629,7 +629,7 @@ fun TooltipView(month: String, masuk: Double, keluar: Double, isDark: Boolean, m
             TooltipRow(label = "Masuk", value = formatCurrency(masuk), color = StitchPrimary)
             TooltipRow(label = "Keluar", value = formatCurrency(keluar), color = StitchAccentRed)
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), thickness = 0.5.dp, color = if(isDark) Color.Gray else Color.LightGray)
-            TooltipRow(label = "Net", value = formatCurrency(net), color = netColor, isBold = true)
+            TooltipRow(label = "Selisih", value = formatCurrency(net), color = netColor, isBold = true)
         }
     }
 }
@@ -677,7 +677,7 @@ fun FinancialInsightsSection(
     } else "Stabil"
 
     Text(
-        text = "Insight Keuangan",
+        text = "Tips Keuangan",
         style = MaterialTheme.typography.titleMedium,
         fontWeight = FontWeight.Bold,
         color = if (isDark) Color.White else iOSLabelLight
@@ -809,7 +809,7 @@ fun ProgressComparisonSection(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Progress $periodLabel",
+                    text = "Perkembangan $periodLabel",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Black,
                     color = Color.White.copy(alpha = 0.5f),
@@ -827,7 +827,7 @@ fun ProgressComparisonSection(
 
             // Pemasukan vs Lalu
             PerformaBarItem(
-                label = "Pemasukan vs Lalu",
+                label = "Uang Masuk vs Lalu",
                 diff = incDiff,
                 progress = if (prevMonthPemasukan > 0) (monthlyPemasukan / prevMonthPemasukan).toFloat().coerceIn(0f, 1f) else 1f,
                 barColor = StitchPrimary,
@@ -838,7 +838,7 @@ fun ProgressComparisonSection(
 
             // Pengeluaran vs Lalu
             PerformaBarItem(
-                label = "Pengeluaran vs Lalu",
+                label = "Uang Keluar vs Lalu",
                 diff = expDiff,
                 progress = if (prevMonthPengeluaran > 0) (monthlyPengeluaran / prevMonthPengeluaran).toFloat().coerceIn(0f, 1f) else 1f,
                 barColor = StitchAccentRed,
@@ -856,7 +856,7 @@ fun ProgressComparisonSection(
             Spacer(modifier = Modifier.height(20.dp))
 
             Text(
-                text = "\"${if (trend == "Meningkat") "Performa keuangan pada $periodLabel membaik dibanding periode sebelumnya." else if (trend == "Menurun") "Waspadai pengeluaran pada $periodLabel agar arus kas kembali sehat." else "Performa keuangan pada $periodLabel cenderung stabil."}\"",
+                text = "\"${if (trend == "Meningkat") "Keadaan keuangan pada $periodLabel membaik dibanding sebelumnya." else if (trend == "Menurun") "Hati-hati dengan belanja pada $periodLabel agar uangmu tetap sehat." else "Keadaan keuangan pada $periodLabel cenderung stabil."}\"",
                 fontSize = 10.sp,
                 fontStyle = FontStyle.Italic,
                 color = Color.White.copy(alpha = 0.35f),
@@ -956,7 +956,7 @@ fun DreamProjectionSection(
         ) {
             Column {
                 Text(
-                    text = "Proyeksi Impian",
+                    text = "Perkiraan Tabungan",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = if (isDark) Color.White else iOSLabelLight
@@ -1131,7 +1131,7 @@ fun BudgetKategoriSection(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Budget per Kategori",
+                text = "Batas Belanja per Jenis",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = if (isDark) Color.White else iOSLabelLight
@@ -1163,7 +1163,7 @@ fun BudgetKategoriSection(
             ) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        text = "Belum ada budget kategori. Atur sekarang!",
+                        text = "Belum ada batas belanja. Atur sekarang!",
                         fontSize = 12.sp,
                         color = iOSTertiaryLabel,
                         fontWeight = FontWeight.Medium
@@ -1425,10 +1425,10 @@ fun HapusBudgetDialog(
 
     AlertDialog(
         onDismissRequest = onDismissRequest,
-        title = { Text(text = "Verifikasi Password", fontWeight = FontWeight.SemiBold) },
+        title = { Text(text = "Masukkan Kata Sandi", fontWeight = FontWeight.SemiBold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(text = "Silakan masukkan password Anda untuk menghapus budget kategori ini.")
+                Text(text = "Masukkan kata sandi kamu untuk menghapus batas belanja ini.")
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
@@ -1703,7 +1703,7 @@ fun CashflowChartsSection(
     val periodLabel = periodLabelMap[selectedPeriod] ?: selectedPeriod
     val uiState = remember(resolvedSeries) { resolveCashflowUiState(resolvedSeries) }
     var selectedIndex by remember(selectedPeriod, resolvedSeries.labels) {
-        mutableStateOf(if (resolvedSeries.labels.isEmpty()) -1 else resolvedSeries.labels.lastIndex)
+        mutableStateOf(-1)
     }
     val safeIndex = safeSelectedIndex(resolvedSeries.labels, selectedIndex)
 
@@ -1742,7 +1742,7 @@ fun CashflowChartsSection(
                     selected = key == selectedPeriod,
                     onClick = {
                         onPeriodChange(key)
-                        selectedIndex = if (resolvedSeries.labels.isEmpty()) -1 else resolvedSeries.labels.lastIndex
+                        selectedIndex = -1
                     },
                     label = {
                         Text(
@@ -2002,7 +2002,7 @@ fun CashflowTrendChart(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Tren Pemasukan dan Pengeluaran",
+                    text = "Tren Uang Masuk dan Keluar",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = if (isDark) Color.White else iOSLabelLight

@@ -195,7 +195,7 @@ fun LoginScreen(
                         )
                         
                         Text(
-                            text = "Smart Finance Manager",
+                            text = "Kelola Uangmu dengan Mudah",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
                             color = textSecondary,

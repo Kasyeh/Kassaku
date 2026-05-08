@@ -35,6 +35,7 @@ import androidx.compose.material.icons.rounded.TrendingUp
 import androidx.compose.material.icons.rounded.Work
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -85,6 +86,7 @@ import com.example.kassaku.ui.components.FinancialInsightCard
 import com.example.kassaku.ui.components.MiniTrendChart
 import com.example.kassaku.utils.formatDisplayDate
 import com.example.kassaku.utils.formatDisplayTime
+import com.example.kassaku.utils.BalanceVisibilityPreferences
 
 // Data model for simplified transaction usage
 data class Transaction(
@@ -210,6 +212,10 @@ fun HomeScreen(
     val statistikData by homeViewModel.statistikData.collectAsStateWithLifecycle()
     val targetPengeluaranResult by homeViewModel.targetPengeluaranResult.collectAsStateWithLifecycle()
     val username = balanceData?.username ?: "User"
+    val balanceVisibilityPreferences = remember(context) { BalanceVisibilityPreferences(context) }
+    var isBalanceVisible by rememberSaveable {
+        mutableStateOf(balanceVisibilityPreferences.isHomeBalanceVisible())
+    }
 
     var isVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -241,7 +247,7 @@ fun HomeScreen(
                     val amount = item.nominal ?: 0.0
                     Transaction(
                         id = item.idTransaksi.toString(),
-                        name = item.kategori ?: "Tanpa Kategori",
+                        name = item.kategori ?: "Tanpa Jenis",
                         date = item.tanggal ?: "Tanggal tidak diketahui",
                         time = if (item.tanggal?.contains(" ") == true) item.tanggal.split(" ")[1].substring(0, 5) else null,
                         amount = if (type == TransactionType.EXPENSE) -abs(amount) else abs(amount),
@@ -358,24 +364,53 @@ fun HomeScreen(
                         Column(
                             modifier = Modifier.padding(24.dp)
                         ) {
-                            Text(
-                                text = "Total Saldo",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = secondaryLabelColor,
-                                fontWeight = FontWeight.Medium
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Uang Saya",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = secondaryLabelColor,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                IconButton(
+                                    onClick = {
+                                        isBalanceVisible = !isBalanceVisible
+                                        balanceVisibilityPreferences.setHomeBalanceVisible(isBalanceVisible)
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = if (isBalanceVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                        contentDescription = if (isBalanceVisible) "Sembunyikan saldo" else "Tampilkan saldo",
+                                        tint = secondaryLabelColor
+                                    )
+                                }
+                            }
                             
                             Spacer(modifier = Modifier.height(8.dp))
                             
                             val currentBalance = balanceData?.saldo?.toDoubleOrNull() ?: 0.0
-                            AnimatedCurrency(
-                                amount = currentBalance,
-                                style = MaterialTheme.typography.displayMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = (-1).sp
-                                ),
-                                color = labelColor
-                            )
+                            if (isBalanceVisible) {
+                                AnimatedCurrency(
+                                    amount = currentBalance,
+                                    style = MaterialTheme.typography.displayMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = (-1).sp
+                                    ),
+                                    color = labelColor
+                                )
+                            } else {
+                                Text(
+                                    text = "Rp •••••••",
+                                    style = MaterialTheme.typography.displayMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = (-1).sp
+                                    ),
+                                    color = labelColor
+                                )
+                            }
 
                             Spacer(modifier = Modifier.height(24.dp))
 
@@ -403,7 +438,7 @@ fun HomeScreen(
                                         }
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
-                                            text = "Pemasukan",
+                                            text = "Uang Masuk",
                                             style = MaterialTheme.typography.labelMedium,
                                             color = secondaryLabelColor
                                         )
@@ -452,7 +487,7 @@ fun HomeScreen(
                                         }
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
-                                            text = "Pengeluaran",
+                                            text = "Uang Keluar",
                                             style = MaterialTheme.typography.labelMedium,
                                             color = secondaryLabelColor
                                         )
@@ -482,7 +517,7 @@ fun HomeScreen(
                                         // Hint to set target
                                         Spacer(modifier = Modifier.height(2.dp))
                                         Text(
-                                            text = "Set Batas",
+                                            text = "Atur Batas",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = accentColor,
                                             fontSize = 10.sp
@@ -514,7 +549,7 @@ fun HomeScreen(
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             ActionButton(
-                                text = "Pemasukan",
+                                text = "Uang Masuk",
                                 icon = Icons.Rounded.Add,
                                 backgroundColor = accentColor,
                                 contentColor = Color.White,
@@ -523,7 +558,7 @@ fun HomeScreen(
                             )
 
                             ActionButton(
-                                text = "Pengeluaran",
+                                text = "Uang Keluar",
                                 icon = Icons.Rounded.Remove,
                                 backgroundColor = accentRed,
                                 contentColor = Color.White,
@@ -533,7 +568,7 @@ fun HomeScreen(
                         }
 
                         ActionButton(
-                            text = "Setor Impian",
+                            text = "Tambah Tabungan",
                             icon = Icons.Filled.Paid,
                             backgroundColor = StitchPrimary,
                             contentColor = Color.White,
@@ -600,7 +635,7 @@ fun HomeScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Transaksi Terbaru",
+                            text = "Catatan Terbaru",
                             fontSize = 20.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = labelColor,
@@ -661,14 +696,14 @@ fun HomeScreen(
                                     }
                                     Spacer(modifier = Modifier.height(16.dp))
                                     Text(
-                                        text = "Belum ada transaksi",
+                                        text = "Belum ada catatan",
                                         fontSize = 17.sp,
                                         fontWeight = FontWeight.Medium,
                                         color = labelColor
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = "Transaksi akan muncul di sini",
+                                        text = "Catatan keuanganmu akan muncul di sini",
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.Normal,
                                         color = secondaryLabelColor
@@ -717,7 +752,7 @@ fun HomeScreen(
                 },
                 title = { 
                     Text(
-                        "Pengeluaran Melebihi Target", 
+                        "Belanja Melebihi Batas", 
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 17.sp,
                         textAlign = TextAlign.Center,
@@ -734,7 +769,7 @@ fun HomeScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            "Pengeluaran bulan ini sudah melebihi batas yang kamu tetapkan.",
+                            "Belanja bulan ini sudah melebihi batas yang kamu tetapkan.",
                             textAlign = TextAlign.Center,
                             fontSize = 15.sp,
                             color = secondaryLabelColor,
@@ -749,7 +784,7 @@ fun HomeScreen(
                             letterSpacing = (-0.5).sp
                         )
                         Text(
-                            "dari target ${formatCurrencyFlexible(target)}",
+                            "dari batas ${formatCurrencyFlexible(target)}",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Normal,
                             color = secondaryLabelColor
@@ -1001,7 +1036,7 @@ fun SetTargetDialog(
         shape = RoundedCornerShape(28.dp),
         title = { 
             Text(
-                "Set Target Bulanan", 
+                "Atur Batas Belanja Bulanan", 
                 fontWeight = FontWeight.ExtraBold,
                 style = MaterialTheme.typography.headlineSmall
             ) 
@@ -1009,7 +1044,7 @@ fun SetTargetDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    "Atur batas maksimal pengeluaran per bulan untuk membantu mengontrol keuangan Anda.",
+                    "Atur batas maksimal belanja per bulan untuk membantu mengontrol keuanganmu.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = StitchTextSecondary
                 )
@@ -1019,7 +1054,7 @@ fun SetTargetDialog(
                 OutlinedTextField(
                     value = targetAmount,
                     onValueChange = { targetAmount = it.filter { c -> c.isDigit() } },
-                    label = { Text("Target Pengeluaran") },
+                    label = { Text("Batas Belanja") },
                     placeholder = { Text("Contoh: 500000") },
                     prefix = { Text("Rp ", fontWeight = FontWeight.Bold) },
                     modifier = Modifier.fillMaxWidth(),
@@ -1033,7 +1068,7 @@ fun SetTargetDialog(
                 )
                 
                 Text(
-                    "Kosongkan atau isi 0 untuk menghapus target.",
+                    "Kosongkan atau isi 0 untuk menghapus batas.",
                     style = MaterialTheme.typography.labelSmall,
                     color = StitchTextSecondary.copy(alpha = 0.7f),
                     fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
@@ -1049,7 +1084,7 @@ fun SetTargetDialog(
                 colors = ButtonDefaults.buttonColors(containerColor = StitchPrimary),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Simpan Target", color = StitchTextPrimary, fontWeight = FontWeight.Bold)
+                Text("Simpan", color = StitchTextPrimary, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
@@ -1086,4 +1121,3 @@ fun AnimatedCurrency(
         modifier = modifier
     )
 }
-

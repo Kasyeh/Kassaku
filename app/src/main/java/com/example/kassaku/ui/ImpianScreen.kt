@@ -178,7 +178,7 @@ fun ImpianScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Impian Saya",
+                        text = "Tabungan Impian",
                         color = textPrimary,
                         style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold)
                     )
@@ -259,7 +259,7 @@ fun ImpianScreen(
                         verticalArrangement = Arrangement.Center
                     ) {
                         Text(
-                            text = "Gagal memuat impian: ${state.message}",
+                            text = "Gagal memuat tabungan: ${state.message}",
                             color = MaterialTheme.colorScheme.error,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
@@ -466,7 +466,7 @@ fun ImpianItemRow(
                     ) {
                         Column {
                             Text(
-                                text = "Terkumpul",
+                                text = "Sudah Terkumpul",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = StitchTextSecondary
                             )
@@ -479,7 +479,7 @@ fun ImpianItemRow(
                         }
                         Column(horizontalAlignment = Alignment.End) {
                             Text(
-                                text = "Sisa Target",
+                                text = "Masih Kurang",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = StitchTextSecondary
                             )
@@ -522,7 +522,7 @@ fun ImpianItemRow(
                         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Setor Dana",
+                            text = "Tambah Tabungan",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -550,7 +550,7 @@ fun EmptyImpianView() {
                 tint = StitchTextSecondary.copy(alpha = 0.5f)
             )
             Text(
-                text = "Belum ada impian",
+                text = "Belum ada tabungan impian",
                 style = MaterialTheme.typography.titleMedium,
                 color = StitchTextSecondary
             )
@@ -577,7 +577,7 @@ fun ImpianDetailDialog(item: ImpianItem, onDismissRequest: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = onDismissRequest,
-        title = { Text(text = item.namaBarang ?: "Detail Impian", fontWeight = FontWeight.SemiBold) },
+        title = { Text(text = item.namaBarang ?: "Detail Tabungan", fontWeight = FontWeight.SemiBold) },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -636,7 +636,7 @@ fun ImpianDetailDialog(item: ImpianItem, onDismissRequest: () -> Unit) {
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        text = "Progress Nyata",
+                        text = "Perkembangan",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -647,7 +647,7 @@ fun ImpianDetailDialog(item: ImpianItem, onDismissRequest: () -> Unit) {
                         color = StitchPrimary
                     )
                     Text(
-                        text = "Sisa target: Rp $sisaTarget • ${"%.1f".format(progress)}% • $statusText",
+                        text = "Masih kurang: Rp $sisaTarget • ${"%.1f".format(progress)}% • $statusText",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -700,7 +700,7 @@ fun TambahImpianDialog(
 
     AlertDialog(
         onDismissRequest = onDismissRequest,
-        title = { Text(text = "Tambah Impian", fontWeight = FontWeight.SemiBold) },
+        title = { Text(text = "Tambah Tabungan Impian", fontWeight = FontWeight.SemiBold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 // Image Picker
@@ -931,10 +931,10 @@ fun HapusImpianDialog(
 
     AlertDialog(
         onDismissRequest = onDismissRequest,
-        title = { Text(text = "Verifikasi Password", fontWeight = FontWeight.SemiBold) },
+        title = { Text(text = "Masukkan Kata Sandi", fontWeight = FontWeight.SemiBold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(text = "Silakan masukkan password Anda untuk menghapus impian ini.")
+                Text(text = "Masukkan kata sandi kamu untuk menghapus tabungan impian ini.")
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },

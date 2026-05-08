@@ -159,7 +159,7 @@ fun RegisterScreen(
                         )
                         
                         Text(
-                            text = "Mulai Kelola Keuanganmu",
+                            text = "Mulai Kelola Uangmu",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
                             color = textSecondary,
@@ -188,7 +188,7 @@ fun RegisterScreen(
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             Text(
-                                text = "Registrasi",
+                                text = "Daftar",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = textPrimary

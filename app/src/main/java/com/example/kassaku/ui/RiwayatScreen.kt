@@ -230,7 +230,7 @@ fun RiwayatScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Riwayat Transaksi",
+                        text = "Catatan Keuangan",
                         color = textPrimary,
                         style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold)
                     )
@@ -290,13 +290,13 @@ fun RiwayatScreen(
                         modifier = Modifier.weight(1f)
                     )
                     FilterTabButton(
-                        text = "Pemasukan",
+                        text = "Uang Masuk",
                         selected = selectedJenis == "pemasukan",
                         onClick = { selectedJenis = "pemasukan" },
                         modifier = Modifier.weight(1f)
                     )
                     FilterTabButton(
-                        text = "Pengeluaran",
+                        text = "Uang Keluar",
                         selected = selectedJenis == "pengeluaran",
                         onClick = { selectedJenis = "pengeluaran" },
                         modifier = Modifier.weight(1f)
@@ -311,7 +311,7 @@ fun RiwayatScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp, vertical = 6.dp),
                 singleLine = true,
-                placeholder = { Text("Cari kategori atau keterangan") },
+                placeholder = { Text("Cari jenis atau catatan") },
                 leadingIcon = {
                     Icon(Icons.Default.Search, contentDescription = "Cari")
                 }
@@ -392,7 +392,7 @@ fun RiwayatScreen(
                         val filteredItems = state.riwayatItems
                         
                         if (filteredItems.isEmpty()) {
-                            EmptyState(message = "Tidak ada transaksi", subMessage = "Belum ada data untuk ditampilkan")
+                            EmptyState(message = "Belum ada catatan", subMessage = "Belum ada data untuk ditampilkan")
                         } else {
                             val groupedItems = filteredItems.groupBy { 
                                 it.tanggal?.split(" ")?.get(0) ?: "Tidak Diketahui" 
@@ -452,7 +452,7 @@ fun RiwayatScreen(
                             verticalArrangement = Arrangement.Center
                         ) {
                             Text(
-                                text = "Gagal memuat riwayat",
+                                text = "Gagal memuat catatan",
                                 color = MaterialTheme.colorScheme.error,
                                 fontWeight = FontWeight.Bold
                             )
@@ -523,10 +523,10 @@ fun RiwayatScreen(
 
             AlertDialog(
                 onDismissRequest = { showResetDialog = false },
-                title = { Text("Verifikasi Password", fontWeight = FontWeight.Bold) },
+                title = { Text("Masukkan Kata Sandi", fontWeight = FontWeight.Bold) },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Text("Silakan masukkan password Anda untuk melanjutkan reset saldo bulan ini.")
+                        Text("Masukkan kata sandi kamu untuk menghapus semua catatan bulan ini.")
                         OutlinedTextField(
                             value = password,
                             onValueChange = { password = it },
@@ -555,7 +555,7 @@ fun RiwayatScreen(
                         enabled = password.isNotEmpty(),
                         colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFEF4444))
                     ) {
-                        Text("Ya, Reset", fontWeight = FontWeight.Bold)
+                        Text("Ya, Hapus", fontWeight = FontWeight.Bold)
                     }
                 },
                 dismissButton = {
@@ -662,7 +662,7 @@ fun RiwayatItemRow(
                 color = if(isDark) Color.White else StitchTextPrimary
             )
             Text(
-                text = "${if (isIncome) "Pemasukan" else "Pengeluaran"} • $timeDisplay • ${item.keterangan ?: "-"}",
+                text = "${if (isIncome) "Uang Masuk" else "Uang Keluar"} • $timeDisplay • ${item.keterangan ?: "-"}",
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Medium,
                 color = if(isDark) Color(0xFF94A3B8) else StitchTextSecondary,
@@ -742,7 +742,7 @@ fun FilterDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Filter Transaksi", fontWeight = FontWeight.Bold) },
+        title = { Text("Filter Catatan", fontWeight = FontWeight.Bold) },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(16.dp),

@@ -176,7 +176,7 @@ fun ProfileScreen(
                         )
                         
                         Text(
-                            text = "Personal Account",
+                            text = "Akun Pribadi",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = textSecondary,
@@ -193,7 +193,7 @@ fun ProfileScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Column(horizontalAlignment = Alignment.Start) {
-                                Text("TOTAL SALDO", fontSize = 10.sp, fontWeight = FontWeight.Black, color = textSecondary, letterSpacing = 1.sp)
+                                Text("UANG SAYA", fontSize = 10.sp, fontWeight = FontWeight.Black, color = textSecondary, letterSpacing = 1.sp)
                                 Text(
                                     text = formatCurrencyFlexible(balanceData?.saldo?.toDoubleOrNull() ?: 0.0),
                                     fontSize = 20.sp,
@@ -210,14 +210,14 @@ fun ProfileScreen(
                             horizontalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             ProfileStatBox(
-                                label = "PEMASUKAN",
+                                label = "UANG MASUK",
                                 value = balanceData?.pemasukan?.toDoubleOrNull() ?: 0.0,
                                 color = Color(0xFF10B981),
                                 modifier = Modifier.weight(1f),
                                 isDark = isDark
                             )
                             ProfileStatBox(
-                                label = "PENGELUARAN",
+                                label = "UANG KELUAR",
                                 value = balanceData?.pengeluaran?.toDoubleOrNull() ?: 0.0,
                                 color = StitchAccentRed,
                                 modifier = Modifier.weight(1f),
@@ -238,7 +238,7 @@ fun ProfileScreen(
                         ) {
                             Icon(Icons.Rounded.Refresh, null, modifier = Modifier.size(20.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("Reset Saldo & Riwayat", fontWeight = FontWeight.Bold)
+                            Text("Hapus Semua Catatan", fontWeight = FontWeight.Bold)
                         }
 
                         Spacer(modifier = Modifier.height(12.dp))
@@ -263,7 +263,7 @@ fun ProfileScreen(
             // Appearance / Theme Section
             item {
                 Text(
-                    text = "Penampilan",
+                    text = "Tampilan",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = textPrimary
@@ -310,7 +310,7 @@ fun ProfileScreen(
                     Icon(Icons.Rounded.Analytics, null, tint = StitchPrimary, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = "Analisis 6 Bulan Terakhir",
+                        text = "6 Bulan Terakhir",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = textPrimary
@@ -412,14 +412,14 @@ fun ProfileScreen(
 
         AlertDialog(
             onDismissRequest = { showResetDialog = false },
-            title = { Text("Verifikasi Password", fontWeight = FontWeight.Bold) },
+            title = { Text("Masukkan Kata Sandi", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text("Password diperlukan untuk meriset saldo menjadi Rp 0 dan menghapus riwayat transaksi bulan ini.")
+                    Text("Kata sandi diperlukan untuk menghapus semua catatan dan mengatur ulang uangmu menjadi Rp 0.")
                     OutlinedTextField(
                         value = password,
                         onValueChange = { password = it },
-                        label = { Text("Password") },
+                        label = { Text("Kata Sandi") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         visualTransformation = if (passwordVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
@@ -444,7 +444,7 @@ fun ProfileScreen(
                     enabled = password.isNotEmpty(),
                     colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFEF4444))
                 ) {
-                    Text("Ya, Reset", fontWeight = FontWeight.Bold)
+                    Text("Ya, Hapus", fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {

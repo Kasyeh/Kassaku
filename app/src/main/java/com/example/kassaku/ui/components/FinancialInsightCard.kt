@@ -114,8 +114,8 @@ private fun calculateInsight(
 ): InsightResult {
     if (statistikData == null || statistikData.pengeluaran.size < 2) {
         return InsightResult(
-            title = "Mulai Perjalanan Finansial",
-            description = "Catat pemasukan dan pengeluaranmu untuk melihat insight di sini.",
+            title = "Mulai Catat Keuanganmu",
+            description = "Catat uang masuk dan keluarmu untuk melihat tips di sini.",
             icon = Icons.Rounded.TrendingFlat,
             iconColor = TrendNeutral
         )
@@ -149,16 +149,16 @@ private fun calculateInsight(
         
         // Positive: Expense decreased
         expenseChange < -10 -> InsightResult(
-            title = "Pengeluaran Menurun",
-            description = "Pengeluaran bulan ini ${kotlin.math.abs(expenseChange)}% lebih rendah dari bulan lalu. Bagus!",
+            title = "Belanja Menurun",
+            description = "Belanja bulan ini ${kotlin.math.abs(expenseChange)}% lebih rendah dari bulan lalu. Bagus!",
             icon = Icons.Rounded.TrendingDown,
             iconColor = TrendPositive
         )
         
         // Warning: Expense increased significantly
         expenseChange > 20 -> InsightResult(
-            title = "Pengeluaran Meningkat",
-            description = "Pengeluaran naik ${expenseChange}% dibanding bulan lalu. Pantau terus ya.",
+            title = "Belanja Meningkat",
+            description = "Belanja naik ${expenseChange}% dibanding bulan lalu. Pantau terus ya.",
             icon = Icons.Rounded.TrendingUp,
             iconColor = TrendNegative
         )

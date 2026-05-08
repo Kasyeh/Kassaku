@@ -104,7 +104,7 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
             
             // Tagline
             Text(
-                text = "Mengelola keuangan dengan tenang",
+                text = "Kelola uangmu dengan mudah",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
                 color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),

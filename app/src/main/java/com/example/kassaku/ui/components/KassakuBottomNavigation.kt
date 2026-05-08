@@ -67,19 +67,19 @@ sealed class BottomNavItem(
     )
     object Impian : BottomNavItem(
         route = AppDestinations.IMPIAN_ROUTE, 
-        title = "Impian", 
+        title = "Tabungan", 
         selectedIcon = Icons.Rounded.Paid,
         unselectedIcon = Icons.Filled.Paid
     )
     object Statistik : BottomNavItem(
         route = AppDestinations.STATISTIK_ROUTE, 
-        title = "Statistik", 
+        title = "Ringkasan", 
         selectedIcon = Icons.Rounded.PieChart,
         unselectedIcon = Icons.Filled.PieChart
     )
     object Riwayat : BottomNavItem(
         route = AppDestinations.RIWAYAT_ROUTE, 
-        title = "Riwayat", 
+        title = "Catatan", 
         selectedIcon = Icons.Rounded.History,
         unselectedIcon = Icons.Filled.History
     )
