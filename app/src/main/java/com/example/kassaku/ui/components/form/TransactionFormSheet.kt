@@ -132,13 +132,6 @@ fun TransactionFormSheet(
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     
-    // Auto-focus amount field when sheet opens
-    LaunchedEffect(isVisible) {
-        if (isVisible) {
-            focusRequester.requestFocus()
-        }
-    }
-    
     // Handle success state
     LaunchedEffect(formState) {
         if (formState is TransactionFormState.Success) {
@@ -202,6 +195,16 @@ fun TransactionFormSheet(
             
             Spacer(modifier = Modifier.height(20.dp))
             
+            // Auto-focus amount field after sheet content is composed
+            LaunchedEffect(Unit) {
+                kotlinx.coroutines.delay(300)
+                try {
+                    focusRequester.requestFocus()
+                } catch (_: IllegalStateException) {
+                    // FocusRequester not yet attached; ignore
+                }
+            }
+
             // Amount Input (Primary focus)
             AmountInputField(
                 value = amount,
