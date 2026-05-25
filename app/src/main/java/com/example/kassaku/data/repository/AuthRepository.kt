@@ -112,9 +112,9 @@ class AuthRepository(private val apiService: ApiService) {
     /**
      * Register user baru
      */
-    suspend fun register(username: String, password: String): Result<UserContent> {
+    suspend fun register(username: String, password: String, email: String? = null): Result<UserContent> {
         return try {
-            val response = apiService.register(username, password)
+            val response = apiService.register(username, password, email)
 
             if (response.isSuccessful) {
                 val registerResponse = response.body()
@@ -149,6 +149,73 @@ class AuthRepository(private val apiService: ApiService) {
                 ?: "Registrasi gagal. Coba lagi."
         } catch (e: Exception) {
             "Registrasi gagal. Coba lagi."
+        }
+    }
+
+    suspend fun sendOtp(username: String, email: String): Result<String> {
+        return try {
+            val response = apiService.sendOtp(username, email)
+            if (response.isSuccessful) {
+                Result.success(response.body()?.message ?: "OTP terkirim")
+            } else {
+                val errorBody = response.errorBody()?.string().orEmpty()
+                Result.failure(Exception(parseApiMessage(errorBody) ?: "Gagal mengirim OTP"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun resetPassword(username: String, email: String, otp: String, password: String): Result<String> {
+        return try {
+            val response = apiService.resetPassword(username, email, otp, password)
+            if (response.isSuccessful) {
+                Result.success(response.body()?.message ?: "Password berhasil diubah")
+            } else {
+                val errorBody = response.errorBody()?.string().orEmpty()
+                Result.failure(Exception(parseApiMessage(errorBody) ?: "Gagal mereset password"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun loginWithGoogle(idToken: String, fcmToken: String? = null): Result<UserContent> {
+        return try {
+            val response: Response<LoginResponse> = apiService.loginWithGoogle(idToken, fcmToken)
+            val gson = Gson()
+
+            if (response.isSuccessful) {
+                val loginResponse = response.body()
+                if (loginResponse != null && loginResponse.responseCode == 200 && loginResponse.content != null) {
+                    val userContent = gson.fromJson(loginResponse.content, UserContent::class.java)
+                    userContent.token?.let { com.example.kassaku.data.remote.ApiClient.setToken(it) }
+                    Result.success(userContent)
+                } else {
+                    Result.failure(Exception(loginResponse?.message ?: "Login Google gagal"))
+                }
+            } else if (response.code() == 403) {
+                val errorBody = response.errorBody()?.string()
+                val loginResponse = gson.fromJson(errorBody, LoginResponse::class.java)
+                if (loginResponse != null && loginResponse.content != null && !loginResponse.content.isJsonNull) {
+                    val blockedContent = gson.fromJson(loginResponse.content, BlockedContent::class.java)
+                    Result.failure(
+                        BlockedException(
+                            blockedContent.idUser,
+                            loginResponse.message,
+                            blockedContent.pendingUnblock,
+                            blockedContent.rejectedUnblock,
+                            blockedContent.rejectedMessage
+                        )
+                    )
+                } else {
+                    Result.failure(Exception(loginResponse?.message ?: "Akses ditolak (403)"))
+                }
+            } else {
+                Result.failure(Exception("Login Google gagal dengan kode: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 }

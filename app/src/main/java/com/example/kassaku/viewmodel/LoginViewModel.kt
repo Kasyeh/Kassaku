@@ -41,6 +41,15 @@ sealed interface UnblockUiState {
     data class Error(val message: String) : UnblockUiState
 }
 
+sealed interface ForgotPasswordState {
+    object Idle : ForgotPasswordState
+    object Loading : ForgotPasswordState
+    data class OtpSent(val username: String, val email: String) : ForgotPasswordState
+    data class OtpVerified(val username: String, val email: String, val otp: String) : ForgotPasswordState
+    data class PasswordResetSuccess(val message: String) : ForgotPasswordState
+    data class PasswordResetError(val message: String) : ForgotPasswordState
+}
+
 class LoginViewModel(
     private val authRepository: AuthRepository = AuthRepository(ApiClient.api),
     private val realtimeDatabaseRepository: RealtimeDatabaseRepository = RealtimeDatabaseRepository()
@@ -52,6 +61,9 @@ class LoginViewModel(
         private set
 
     var unblockUiState: UnblockUiState by mutableStateOf(UnblockUiState.Idle)
+        private set
+
+    var forgotPasswordUiState: ForgotPasswordState by mutableStateOf(ForgotPasswordState.Idle)
         private set
 
     // Realtime unblock response from admin via RTDB
@@ -94,6 +106,41 @@ class LoginViewModel(
                 )
             } catch (e: Exception) {
                 loginUiState = LoginUiState.Error("Terjadi kesalahan: ${e.message}")
+            }
+        }
+    }
+
+    fun loginWithGoogle(idToken: String) {
+        loginUiState = LoginUiState.Loading
+        viewModelScope.launch {
+            try {
+                // Fetch latest FCM token
+                val fcmToken = try {
+                    FirebaseMessaging.getInstance().token.await()
+                } catch (e: Exception) {
+                    null
+                }
+
+                val result = authRepository.loginWithGoogle(idToken, fcmToken)
+                result.fold(
+                    onSuccess = { user ->
+                        loginUiState = LoginUiState.Success(user)
+                    },
+                    onFailure = { exception ->
+                        loginUiState = when (exception) {
+                            is BlockedException -> LoginUiState.Blocked(
+                                exception.idUser,
+                                exception.message,
+                                exception.pendingUnblock,
+                                exception.rejectedUnblock,
+                                exception.rejectedMessage
+                            )
+                            else -> LoginUiState.Error(exception.message ?: "Login Google gagal")
+                        }
+                    }
+                )
+            } catch (e: Exception) {
+                loginUiState = LoginUiState.Error("Login Google gagal: ${e.message}")
             }
         }
     }
@@ -175,6 +222,60 @@ class LoginViewModel(
 
     fun resetLoginState() {
         loginUiState = LoginUiState.Idle
+    }
+
+    fun sendOtp(username: String, email: String) {
+        if (username.isBlank() || username.length < 2) {
+            forgotPasswordUiState = ForgotPasswordState.PasswordResetError("Username tidak valid")
+            return
+        }
+        if (email.isBlank()) {
+            forgotPasswordUiState = ForgotPasswordState.PasswordResetError("Email tidak boleh kosong")
+            return
+        }
+        forgotPasswordUiState = ForgotPasswordState.Loading
+        viewModelScope.launch {
+            authRepository.sendOtp(username, email).fold(
+                onSuccess = { _: String ->
+                    forgotPasswordUiState = ForgotPasswordState.OtpSent(username, email)
+                },
+                onFailure = { exception: Throwable ->
+                    forgotPasswordUiState = ForgotPasswordState.PasswordResetError(exception.message ?: "Gagal mengirim OTP")
+                }
+            )
+        }
+    }
+
+    fun verifyOtp(username: String, email: String, otp: String) {
+        if (otp.length != 6) {
+            forgotPasswordUiState = ForgotPasswordState.PasswordResetError("Kode OTP harus 6 digit")
+            return
+        }
+        // Actually the backend verify is combined with reset, but we can simulate a step or just call reset.
+        // For now, we move to the next UI step.
+        forgotPasswordUiState = ForgotPasswordState.OtpVerified(username, email, otp)
+    }
+
+    fun resetPassword(username: String, email: String, otp: String, newPassword: String) {
+        if (newPassword.length < 8) {
+            forgotPasswordUiState = ForgotPasswordState.PasswordResetError("Password minimal 8 karakter")
+            return
+        }
+        forgotPasswordUiState = ForgotPasswordState.Loading
+        viewModelScope.launch {
+            authRepository.resetPassword(username, email, otp, newPassword).fold(
+                onSuccess = { msg: String ->
+                    forgotPasswordUiState = ForgotPasswordState.PasswordResetSuccess(msg)
+                },
+                onFailure = { exception: Throwable ->
+                    forgotPasswordUiState = ForgotPasswordState.PasswordResetError(exception.message ?: "Gagal mereset password")
+                }
+            )
+        }
+    }
+
+    fun resetForgotPasswordState() {
+        forgotPasswordUiState = ForgotPasswordState.Idle
     }
 
     override fun onCleared() {

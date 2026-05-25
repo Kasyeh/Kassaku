@@ -2,7 +2,9 @@ package com.example.kassaku
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.Intent
 import android.os.Bundle
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.core.animateDpAsState
@@ -21,7 +23,12 @@ import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PieChart
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -63,6 +70,7 @@ import com.example.kassaku.ui.SplashScreen
 import com.example.kassaku.ui.StatistikScreen
 import com.example.kassaku.ui.theme.KasSakuTheme
 import com.example.kassaku.ui.theme.StitchPrimary
+import com.example.kassaku.service.EXTRA_OPEN_NOTIFICATIONS_INBOX
 import com.example.kassaku.utils.ForceLogoutManager
 import com.example.kassaku.utils.ThemeMode
 import com.example.kassaku.utils.ThemePreferences
@@ -84,8 +92,16 @@ import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableStateFlow
 
-class MainActivity : ComponentActivity() {
+import androidx.fragment.app.FragmentActivity
+import com.example.kassaku.utils.SecurityPreferences
+import com.example.kassaku.utils.SecurityUtils
+import androidx.compose.runtime.mutableStateOf
+
+class MainActivity : FragmentActivity() {
+    private val openNotificationsSignal = MutableStateFlow(0)
+    private var isAppAuthenticated = mutableStateOf(false)
     
     // Request permission launcher untuk notifikasi
     private val requestPermissionLauncher = registerForActivityResult(
@@ -99,16 +115,37 @@ class MainActivity : ComponentActivity() {
         }
     }
     
+    @OptIn(ExperimentalSharedTransitionApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val themePreferences = ThemePreferences(this)
+        val securityPreferences = SecurityPreferences(this)
         val initialThemeMode = themePreferences.getThemeMode()
+        val initialDynamicColor = themePreferences.isDynamicColorEnabled()
         
         // Request notification permission dan get FCM token
         askNotificationPermission()
         
         // Initialize Notification Channel
         createNotificationChannel()
+        consumeNotificationIntent(intent)
+
+        // Handle App Lock
+        if (securityPreferences.isAppLockEnabled() && SecurityUtils.isBiometricAvailable(this)) {
+            isAppAuthenticated.value = false
+            SecurityUtils.showBiometricPrompt(
+                activity = this,
+                onSuccess = {
+                    isAppAuthenticated.value = true
+                },
+                onError = { error ->
+                    Toast.makeText(this, "Autentikasi gagal: $error", Toast.LENGTH_SHORT).show()
+                    // Jika gagal, tetap terkunci atau bisa berikan tombol retry di UI
+                }
+            )
+        } else {
+            isAppAuthenticated.value = true
+        }
 
         setContent {
             val homeViewModel: HomeViewModel = viewModel()
@@ -119,23 +156,69 @@ class MainActivity : ComponentActivity() {
                 if (homeViewModel.themeMode.value == ThemeMode.SYSTEM) {
                     homeViewModel.setThemeMode(initialThemeMode)
                 }
+                homeViewModel.setDynamicColor(initialDynamicColor)
                 true
             }
 
             val themeMode by homeViewModel.themeMode.collectAsState()
+            val dynamicColor by homeViewModel.isDynamicColor.collectAsState()
+            val authenticated by isAppAuthenticated
 
             // Sync persistence when theme changes
-            LaunchedEffect(themeMode) {
+            LaunchedEffect(themeMode, dynamicColor) {
                 themePreferences.setThemeMode(themeMode)
+                themePreferences.setDynamicColorEnabled(dynamicColor)
             }
 
-            KasSakuTheme(themeMode = themeMode) {
-                KasSakuApp(
-                    homeViewModel = homeViewModel,
-                    onSyncFCM = { userId -> getFCMToken(userId) }
-                )
+            KasSakuTheme(
+                themeMode = themeMode,
+                dynamicColor = dynamicColor
+            ) {
+                if (authenticated) {
+                    androidx.compose.animation.SharedTransitionLayout {
+                        KasSakuApp(
+                            homeViewModel = homeViewModel,
+                            onSyncFCM = { userId -> getFCMToken(userId) },
+                            openNotificationsSignal = openNotificationsSignal,
+                            sharedTransitionScope = this
+                        )
+                    }
+                } else {
+                    // Tampilan saat terkunci (bisa berupa layar kosong dengan tombol login ulang biometrik)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                imageVector = Icons.Filled.Lock,
+                                contentDescription = null,
+                                modifier = Modifier.size(64.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            androidx.compose.material3.Button(onClick = {
+                                SecurityUtils.showBiometricPrompt(
+                                    activity = this@MainActivity,
+                                    onSuccess = { isAppAuthenticated.value = true },
+                                    onError = { Toast.makeText(this@MainActivity, it, Toast.LENGTH_SHORT).show() }
+                                )
+                            }) {
+                                Text("Buka Kunci")
+                            }
+                        }
+                    }
+                }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        consumeNotificationIntent(intent)
     }
     
     /**
@@ -223,6 +306,13 @@ class MainActivity : ComponentActivity() {
             Log.d("MainActivity", "Notification channel created: $channelId")
         }
     }
+
+    private fun consumeNotificationIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_OPEN_NOTIFICATIONS_INBOX, false) == true) {
+            openNotificationsSignal.value = openNotificationsSignal.value + 1
+            intent.removeExtra(EXTRA_OPEN_NOTIFICATIONS_INBOX)
+        }
+    }
 }
 
 // BottomNavItem sealed class moved to ui/components/KassakuBottomNavigation.kt
@@ -239,12 +329,22 @@ object AppDestinations {
     const val RIWAYAT_ROUTE = "riwayat_bottom_nav"
     const val STATISTIK_ROUTE = "statistik_bottom_nav"
     const val PROFIL_ROUTE = "profil_bottom_nav"
+    const val REMINDER_SETTINGS_ROUTE = "reminder_settings"
+    const val CHATBOT_ROUTE = "chatbot"
 
     const val USER_ID_ARG = "userId"
+    const val FORGOT_PASSWORD_ROUTE = "forgot_password"
+    const val TRANSACTION_DETAIL_ROUTE = "transaction_detail"
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun KasSakuApp(homeViewModel: HomeViewModel, onSyncFCM: (Int?) -> Unit) {
+fun KasSakuApp(
+    homeViewModel: HomeViewModel,
+    onSyncFCM: (Int?) -> Unit,
+    openNotificationsSignal: MutableStateFlow<Int>,
+    sharedTransitionScope: androidx.compose.animation.SharedTransitionScope
+) {
     val context = LocalContext.current
     val navController = rememberNavController()
     // NavHost utama: mengelola navigasi antara Login dan MainApp (setelah login)
@@ -299,6 +399,9 @@ fun KasSakuApp(homeViewModel: HomeViewModel, onSyncFCM: (Int?) -> Unit) {
                 onNavigateToRegister = {
                     navController.navigate(AppDestinations.REGISTER_ROUTE)
                 },
+                onNavigateToForgotPassword = {
+                    navController.navigate(AppDestinations.FORGOT_PASSWORD_ROUTE)
+                },
                 onSyncFCM = onSyncFCM
             )
         }
@@ -329,6 +432,11 @@ fun KasSakuApp(homeViewModel: HomeViewModel, onSyncFCM: (Int?) -> Unit) {
                 onSyncFCM = onSyncFCM
             )
         }
+        composable(AppDestinations.FORGOT_PASSWORD_ROUTE) {
+            com.example.kassaku.ui.ForgotPasswordScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
         composable(
             route = "${AppDestinations.MAIN_APP_ROUTE}/{${AppDestinations.USER_ID_ARG}}",
             arguments = listOf(navArgument(AppDestinations.USER_ID_ARG) { type = NavType.IntType })
@@ -339,11 +447,17 @@ fun KasSakuApp(homeViewModel: HomeViewModel, onSyncFCM: (Int?) -> Unit) {
                 MainAppScreen(
                     userId = userId,
                     homeViewModel = homeViewModel,
+                    openNotificationsSignal = openNotificationsSignal,
+                    sharedTransitionScope = sharedTransitionScope,
                     onLogout = { reason ->
                         // Clear SharedPreferences dan token
                         val sharedPref = context.getSharedPreferences("KassakuPrefs", Context.MODE_PRIVATE)
                         sharedPref.edit().remove("user_id").remove("remember_me").remove("auth_token").apply()
                         com.example.kassaku.data.remote.ApiClient.clearToken()
+
+                        // Clear Google Sign-In state to force account picker on next login
+                        val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN).build()
+                        com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(context, gso).signOut()
 
                         if (reason == com.example.kassaku.viewmodel.LogoutReason.BLOCKED) {
                            Toast.makeText(context, "Akun Anda telah dinonaktifkan oleh admin", Toast.LENGTH_LONG).show()
@@ -363,8 +477,15 @@ fun KasSakuApp(homeViewModel: HomeViewModel, onSyncFCM: (Int?) -> Unit) {
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun MainAppScreen(userId: Int, homeViewModel: HomeViewModel, onLogout: (com.example.kassaku.viewmodel.LogoutReason) -> Unit) {
+fun MainAppScreen(
+    userId: Int,
+    homeViewModel: HomeViewModel,
+    openNotificationsSignal: MutableStateFlow<Int>,
+    sharedTransitionScope: androidx.compose.animation.SharedTransitionScope,
+    onLogout: (com.example.kassaku.viewmodel.LogoutReason) -> Unit
+) {
     val bottomNavController = rememberNavController()
     val context = LocalContext.current
     var lastBackPressTime by remember { androidx.compose.runtime.mutableStateOf(0L) }
@@ -373,7 +494,10 @@ fun MainAppScreen(userId: Int, homeViewModel: HomeViewModel, onLogout: (com.exam
         homeViewModel.startSessionMonitoring(userId)
     }
 
-    androidx.activity.compose.BackHandler {
+    val navBackStackEntry by bottomNavController.currentBackStackEntryAsState()
+    val isRootDestination = navBackStackEntry?.destination?.route == com.example.kassaku.ui.components.BottomNavItem.Home.route
+
+    androidx.activity.compose.BackHandler(enabled = isRootDestination) {
         val currentTime = System.currentTimeMillis()
         if (currentTime - lastBackPressTime < 2000) {
             (context as? android.app.Activity)?.finish()
@@ -397,6 +521,8 @@ fun MainAppScreen(userId: Int, homeViewModel: HomeViewModel, onLogout: (com.exam
         }
     }
 
+    val notificationOpenSignal by openNotificationsSignal.collectAsState()
+
     Scaffold(
         bottomBar = {
             KassakuBottomBar(navController = bottomNavController)
@@ -413,6 +539,7 @@ fun MainAppScreen(userId: Int, homeViewModel: HomeViewModel, onLogout: (com.exam
                     userId = userId, 
                     homeViewModel = homeViewModel, 
                     navController = bottomNavController,
+                    openNotificationInboxSignal = notificationOpenSignal,
                     onLogout = { onLogout(com.example.kassaku.viewmodel.LogoutReason.MANUAL) }
                 )
             }
@@ -427,6 +554,9 @@ fun MainAppScreen(userId: Int, homeViewModel: HomeViewModel, onLogout: (com.exam
                 RiwayatScreen(
                     userId = userId, 
                     homeViewModel = homeViewModel,
+                    navController = bottomNavController,
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = this,
                     onLogout = { onLogout(com.example.kassaku.viewmodel.LogoutReason.MANUAL) }
                 )
             }
@@ -450,7 +580,33 @@ fun MainAppScreen(userId: Int, homeViewModel: HomeViewModel, onLogout: (com.exam
                 ProfileScreen(
                     userId = userId,
                     homeViewModel = homeViewModel,
-                    onLogout = { onLogout(com.example.kassaku.viewmodel.LogoutReason.MANUAL) }
+                    onLogout = { onLogout(com.example.kassaku.viewmodel.LogoutReason.MANUAL) },
+                    onNavigateToReminderSettings = {
+                        bottomNavController.navigate(AppDestinations.REMINDER_SETTINGS_ROUTE)
+                    }
+                )
+            }
+            composable(AppDestinations.REMINDER_SETTINGS_ROUTE) {
+                com.example.kassaku.ui.ReminderSettingsScreen(
+                    onBack = { bottomNavController.popBackStack() }
+                )
+            }
+            composable(
+                route = "${AppDestinations.TRANSACTION_DETAIL_ROUTE}/{transactionId}",
+                arguments = listOf(navArgument("transactionId") { type = NavType.LongType })
+            ) { backStackEntry ->
+                val transactionId = backStackEntry.arguments?.getLong("transactionId") ?: 0L
+                com.example.kassaku.ui.TransactionDetailScreen(
+                    transactionId = transactionId,
+                    homeViewModel = homeViewModel,
+                    navController = bottomNavController,
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = this
+                )
+            }
+            composable(AppDestinations.CHATBOT_ROUTE) {
+                com.example.kassaku.ui.ChatbotScreen(
+                    onBackClick = { bottomNavController.popBackStack() }
                 )
             }
         }

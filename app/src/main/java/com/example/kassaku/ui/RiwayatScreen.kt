@@ -13,6 +13,7 @@ import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -61,6 +62,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.kassaku.data.remote.model.BalanceData
 import com.example.kassaku.data.remote.model.RiwayatItem
+import com.example.kassaku.ui.theme.KassakuSpacing
 import com.example.kassaku.ui.theme.*
 import com.example.kassaku.ui.components.LogoutConfirmationDialog
 import com.example.kassaku.viewmodel.ExportPdfResult
@@ -87,11 +89,16 @@ import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Remove
 import com.example.kassaku.ui.components.skeleton.SkeletonTransactionList
+import com.example.kassaku.ui.components.formatCurrencyFlexible
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun RiwayatScreen(
     userId: Int,
     homeViewModel: HomeViewModel,
+    navController: androidx.navigation.NavController,
+    sharedTransitionScope: androidx.compose.animation.SharedTransitionScope,
+    animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -235,27 +242,32 @@ fun RiwayatScreen(
                         style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold)
                     )
                     
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val iconModifier = Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .background(if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f))
+
                         IconButton(
                             onClick = { showResetDialog = true },
+                            modifier = iconModifier
                         ) {
-                            Icon(Icons.Default.Refresh, "Reset", tint = textPrimary)
+                            Icon(Icons.Default.Refresh, "Reset", tint = textPrimary, modifier = Modifier.size(20.dp))
                         }
+                        
                         IconButton(
                             onClick = { showExportDialog = true },
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f))
+                            modifier = iconModifier
                         ) {
                             Icon(Icons.Outlined.Save, "Export", tint = textPrimary, modifier = Modifier.size(20.dp))
                         }
+                        
                         IconButton(
                             onClick = { showFilterDialog = true },
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f))
+                            modifier = iconModifier
                         ) {
                             Icon(Icons.Outlined.FilterList, "Filter", tint = textPrimary, modifier = Modifier.size(20.dp))
                         }
@@ -280,8 +292,8 @@ fun RiwayatScreen(
                         .fillMaxWidth()
                         .shadow(2.dp, RoundedCornerShape(16.dp))
                         .background(surfaceColor, RoundedCornerShape(16.dp))
-                        .padding(6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(0.dp)
+                        .padding(KassakuSpacing.elementGap - 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     FilterTabButton(
                         text = "Semua",
@@ -399,17 +411,20 @@ fun RiwayatScreen(
                             }
 
                             LazyColumn(
-                                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
-                                verticalArrangement = Arrangement.spacedBy(24.dp)
+                                contentPadding = PaddingValues(
+                                    horizontal = KassakuSpacing.screenHorizontal,
+                                    vertical = KassakuSpacing.screenVertical
+                                ),
+                                verticalArrangement = Arrangement.spacedBy(KassakuSpacing.sectionGap)
                             ) {
                                 groupedItems.forEach { (date, items) ->
                                     item {
-                                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        Column(verticalArrangement = Arrangement.spacedBy(KassakuSpacing.elementGap + 4.dp)) {
                                             // Date Header
                                             Row(
                                                 verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                                modifier = Modifier.padding(start = 4.dp)
+                                                horizontalArrangement = Arrangement.spacedBy(KassakuSpacing.elementGap),
+                                                modifier = Modifier.padding(start = KassakuSpacing.sectionTitleInset, bottom = 4.dp)
                                             ) {
                                                 Box(modifier = Modifier
                                                     .size(6.dp)
@@ -432,7 +447,17 @@ fun RiwayatScreen(
                                             ) {
                                                 Column {
                                                     items.forEachIndexed { index, item ->
-                                                        RiwayatItemRow(item = item, isLast = index == items.lastIndex, isDark = isDark)
+                                                        RiwayatItemRow(
+                                                            item = item, 
+                                                            isLast = index == items.lastIndex, 
+                                                            isDark = isDark,
+                                                            currencyCode = homeViewModel.balanceData.value?.currency ?: "IDR",
+                                                            onClick = {
+                                                                navController.navigate("transaction_detail/${item.idTransaksi}")
+                                                            },
+                                                            sharedTransitionScope = sharedTransitionScope,
+                                                            animatedVisibilityScope = animatedVisibilityScope
+                                                        )
                                                     }
                                                 }
                                             }
@@ -610,13 +635,22 @@ fun FilterTabButton(
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun RiwayatItemRow(
     item: RiwayatItem,
     isLast: Boolean,
-    isDark: Boolean
+    isDark: Boolean,
+    currencyCode: String,
+    onClick: () -> Unit,
+    sharedTransitionScope: androidx.compose.animation.SharedTransitionScope,
+    animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope
 ) {
-    val isIncome = item.tipe?.equals("pemasukan", ignoreCase = true) == true
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val hapticManager = remember { com.example.kassaku.utils.HapticManager(context) }
+
+    with(sharedTransitionScope) {
+        val isIncome = item.tipe?.equals("pemasukan", ignoreCase = true) == true
     val amountColor = if (isIncome) StitchPrimary else StitchNegative
     val icon = if (isIncome) Icons.Rounded.Add else Icons.Rounded.Remove
     val iconBgColor = if (isIncome) StitchPrimaryLight else Color(0x33EF4444)
@@ -634,8 +668,15 @@ fun RiwayatItemRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { }
-            .padding(16.dp),
+            .clickable { 
+                hapticManager.lightTick()
+                onClick() 
+            }
+            .sharedBounds(
+                sharedContentState = rememberSharedContentState(key = "transaction_item_${item.idTransaksi}"),
+                animatedVisibilityScope = animatedVisibilityScope
+            )
+            .padding(KassakuSpacing.cardInner),
         verticalAlignment = Alignment.CenterVertically
     ) {
          Box(
@@ -652,7 +693,7 @@ fun RiwayatItemRow(
             )
         }
         
-        Spacer(modifier = Modifier.width(16.dp))
+        Spacer(modifier = Modifier.width(KassakuSpacing.elementGap + 4.dp))
         
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -671,11 +712,12 @@ fun RiwayatItemRow(
         }
         
         Text(
-            text = "$sign$formattedAmount",
+            text = "${if (isIncome) "+ " else "- "}${formatCurrencyFlexible(abs(item.nominal ?: 0.0), currencyCode)}",
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Bold,
             color = amountColor
         )
+    }
     }
     
     if (!isLast) {

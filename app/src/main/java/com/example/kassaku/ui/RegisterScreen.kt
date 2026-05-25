@@ -16,10 +16,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Circle
+import androidx.compose.material.icons.filled.*
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -45,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.kassaku.R
 import com.example.kassaku.ui.components.AuroraBackground
+import com.example.kassaku.ui.theme.KassakuSpacing
 import com.example.kassaku.ui.theme.*
 import com.example.kassaku.viewmodel.RegisterUiState
 import com.example.kassaku.viewmodel.RegisterViewModel
@@ -59,6 +58,7 @@ fun RegisterScreen(
     registerViewModel: RegisterViewModel = viewModel()
 ) {
     var username by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
 
@@ -68,8 +68,9 @@ fun RegisterScreen(
     val hasSymbol by remember { derivedStateOf { password.any { !it.isLetterOrDigit() && !it.isWhitespace() } } }
     val hasNoSpace by remember { derivedStateOf { password.isNotEmpty() && !password.any { it.isWhitespace() } } }
 
+    val isEmailValid by remember { derivedStateOf { email.isNotEmpty() && android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches() } }
     val isPasswordValid by remember { derivedStateOf { hasMinLength && hasUppercase && hasDigit && hasSymbol && hasNoSpace } }
-    val isFormValid by remember { derivedStateOf { username.isNotBlank() && isPasswordValid } }
+    val isFormValid by remember { derivedStateOf { username.isNotBlank() && email.isNotBlank() && isPasswordValid && isEmailValid } }
     
     val registerUiState = registerViewModel.registerUiState
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -131,44 +132,16 @@ fun RegisterScreen(
                     enter = fadeIn(tween(800)) + expandVertically(expandFrom = Alignment.Top)
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(
-                            modifier = Modifier
-                                .size(90.dp)
-                                .shadow(24.dp, CircleShape, spotColor = primaryColor.copy(alpha = 0.3f))
-                                .clip(CircleShape)
-                                .background(if (isDark) Color(0xFF1E293B).copy(alpha = 0.8f) else Color.White.copy(alpha = 0.9f))
-                                .border(1.dp, glassBorderColor, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Image(
-                                painter = painterResource(id = R.drawable.logo),
-                                contentDescription = "Logo",
-                                modifier = Modifier.size(56.dp),
-                                contentScale = ContentScale.Fit
-                            )
-                        }
-                        
-                        Spacer(modifier = Modifier.height(24.dp))
-                        
-                        Text(
-                            text = "Buat Akun",
-                            fontSize = 32.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = textPrimary,
-                            letterSpacing = (-1).sp
-                        )
-                        
-                        Text(
-                            text = "Mulai Kelola Uangmu",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = textSecondary,
-                            modifier = Modifier.alpha(0.8f)
+                        Image(
+                            painter = painterResource(id = R.drawable.logo),
+                            contentDescription = "Logo KasSaku",
+                            modifier = Modifier.size(80.dp),
+                            contentScale = ContentScale.Fit
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(40.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
                 // Glass Card Form
                 AnimatedVisibility(
@@ -178,94 +151,160 @@ fun RegisterScreen(
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .border(1.dp, glassBorderColor, RoundedCornerShape(32.dp)),
-                        shape = RoundedCornerShape(32.dp),
+                            .border(1.dp, glassBorderColor, RoundedCornerShape(48.dp)),
+                        shape = RoundedCornerShape(48.dp),
                         color = glassColor,
                         shadowElevation = 0.dp
                     ) {
                         Column(
-                            modifier = Modifier.padding(24.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                            modifier = Modifier.padding(horizontal = 28.dp, vertical = 32.dp),
+                            verticalArrangement = Arrangement.spacedBy(KassakuSpacing.cardGap)
                         ) {
                             Text(
-                                text = "Daftar",
-                                style = MaterialTheme.typography.titleMedium,
+                                text = "Buat Akun",
+                                fontSize = 26.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = textPrimary,
+                                letterSpacing = (-0.5).sp
+                            )
+                            Text(
+                                text = "Silakan lengkapi data dirimu",
+                                fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = textPrimary
+                                color = textSecondary
                             )
 
                             // Username
-                            TextField(
-                                value = username,
-                                onValueChange = { username = it },
-                                placeholder = { Text("Username", color = textSecondary.copy(alpha = 0.6f)) },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(56.dp),
-                                shape = RoundedCornerShape(16.dp),
-                                colors = TextFieldDefaults.colors(
-                                    focusedTextColor = textPrimary,
-                                    unfocusedTextColor = textPrimary,
-                                    focusedContainerColor = if(isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.05f),
-                                    unfocusedContainerColor = if(isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.05f),
-                                    focusedIndicatorColor = Color.Transparent,
-                                    unfocusedIndicatorColor = Color.Transparent,
-                                    cursorColor = primaryColor
-                                ),
-                                singleLine = true,
-                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                                keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) })
-                            )
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    text = "USERNAME",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = textSecondary.copy(alpha = 0.7f),
+                                    letterSpacing = 2.sp,
+                                    modifier = Modifier.padding(start = 4.dp)
+                                )
+                                TextField(
+                                    value = username,
+                                    onValueChange = { username = it },
+                                    placeholder = { Text("Pilih username", color = textSecondary.copy(alpha = 0.4f), fontWeight = FontWeight.Bold, fontSize = 14.sp) },
+                                    modifier = Modifier.fillMaxWidth().height(58.dp),
+                                    shape = RoundedCornerShape(24.dp),
+                                    leadingIcon = { Icon(Icons.Default.Person, null, tint = textSecondary.copy(alpha = 0.5f)) },
+                                    colors = TextFieldDefaults.colors(
+                                        focusedContainerColor = if(isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFF8FAFC),
+                                        unfocusedContainerColor = if(isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFF8FAFC),
+                                        focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
+                                        cursorColor = primaryColor,
+                                        focusedTextColor = textPrimary, unfocusedTextColor = textPrimary
+                                    ),
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                                    keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) })
+                                )
+                            }
+
+                            // Gmail
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    text = "EMAIL",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = textSecondary.copy(alpha = 0.7f),
+                                    letterSpacing = 2.sp,
+                                    modifier = Modifier.padding(start = 4.dp)
+                                )
+                                TextField(
+                                    value = email,
+                                    onValueChange = { email = it },
+                                    placeholder = { Text("Contoh: budi@gmail.com", color = textSecondary.copy(alpha = 0.4f), fontWeight = FontWeight.Bold, fontSize = 14.sp) },
+                                    modifier = Modifier.fillMaxWidth().height(58.dp),
+                                    shape = RoundedCornerShape(24.dp),
+                                    isError = !isEmailValid && email.isNotEmpty(),
+                                    leadingIcon = { Icon(Icons.Default.Email, null, tint = textSecondary.copy(alpha = 0.5f)) },
+                                    colors = TextFieldDefaults.colors(
+                                        focusedContainerColor = if(isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFF8FAFC),
+                                        unfocusedContainerColor = if(isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFF8FAFC),
+                                        focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
+                                        cursorColor = primaryColor,
+                                        focusedTextColor = textPrimary, unfocusedTextColor = textPrimary
+                                    ),
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
+                                    keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) })
+                                )
+                            }
 
                             // Password
-                            TextField(
-                                value = password,
-                                onValueChange = { password = it },
-                                placeholder = { Text("Password", color = textSecondary.copy(alpha = 0.6f)) },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(56.dp),
-                                shape = RoundedCornerShape(16.dp),
-                                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                                trailingIcon = {
-                                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                        Icon(
-                                            imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                            contentDescription = null,
-                                            tint = textSecondary
-                                        )
-                                    }
-                                },
-                                colors = TextFieldDefaults.colors(
-                                    focusedTextColor = textPrimary,
-                                    unfocusedTextColor = textPrimary,
-                                    focusedContainerColor = if(isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.05f),
-                                    unfocusedContainerColor = if(isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.05f),
-                                    focusedIndicatorColor = Color.Transparent,
-                                    unfocusedIndicatorColor = Color.Transparent,
-                                    cursorColor = primaryColor
-                                ),
-                                singleLine = true,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Done),
-                                keyboardActions = KeyboardActions(onDone = {
-                                    if (isFormValid) {
-                                        focusManager.clearFocus()
-                                        registerViewModel.register(username, password)
-                                    }
-                                })
-                            )
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    text = "PASSWORD",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = textSecondary.copy(alpha = 0.7f),
+                                    letterSpacing = 2.sp,
+                                    modifier = Modifier.padding(start = 4.dp)
+                                )
+                                TextField(
+                                    value = password,
+                                    onValueChange = { password = it },
+                                    placeholder = { Text("••••••••", color = textSecondary.copy(alpha = 0.4f), fontWeight = FontWeight.Bold, fontSize = 14.sp) },
+                                    modifier = Modifier.fillMaxWidth().height(58.dp),
+                                    shape = RoundedCornerShape(24.dp),
+                                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                                    leadingIcon = { Icon(Icons.Default.Lock, null, tint = textSecondary.copy(alpha = 0.5f)) },
+                                    trailingIcon = {
+                                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                            Icon(if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff, null, tint = textSecondary.copy(alpha = 0.5f))
+                                        }
+                                    },
+                                    colors = TextFieldDefaults.colors(
+                                        focusedContainerColor = if(isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFF8FAFC),
+                                        unfocusedContainerColor = if(isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFF8FAFC),
+                                        focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
+                                        cursorColor = primaryColor,
+                                        focusedTextColor = textPrimary, unfocusedTextColor = textPrimary
+                                    ),
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Done),
+                                    keyboardActions = KeyboardActions(onDone = {
+                                        if (isFormValid) {
+                                            focusManager.clearFocus()
+                                            registerViewModel.register(username, password, email)
+                                        }
+                                    })
+                                )
+                            }
 
-                            // Password Checklist
+                            // Password Strength & Checklist
                             Column(
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                                verticalArrangement = Arrangement.spacedBy(KassakuSpacing.elementGap)
                             ) {
-                                RequirementItem("Minimal 8 karakter", hasMinLength, isDark)
-                                RequirementItem("Huruf Kapital", hasUppercase, isDark)
-                                RequirementItem("Angka", hasDigit, isDark)
-                                RequirementItem("Simbol (!@#\$%^&*_)", hasSymbol, isDark)
-                                if (password.any { it.isWhitespace() }) {
-                                    RequirementItem("Tidak mengandung spasi", hasNoSpace, isDark)
+                                val strength = listOf(hasMinLength, hasUppercase, hasDigit, hasSymbol).count { it }
+                                LinearProgressIndicator(
+                                    progress = strength / 4f,
+                                    modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
+                                    color = when(strength) {
+                                        0, 1 -> Color(0xFFEF4444)
+                                        2, 3 -> Color(0xFFF59E0B)
+                                        else -> Color(0xFF10B981)
+                                    },
+                                    trackColor = if(isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f)
+                                )
+
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Row(modifier = Modifier.fillMaxWidth()) {
+                                        Box(Modifier.weight(1f)) { RequirementItem("Minimal 8 karakter", hasMinLength, isDark) }
+                                        Box(Modifier.weight(1f)) { RequirementItem("Huruf Kapital", hasUppercase, isDark) }
+                                    }
+                                    Row(modifier = Modifier.fillMaxWidth()) {
+                                        Box(Modifier.weight(1f)) { RequirementItem("Angka", hasDigit, isDark) }
+                                        Box(Modifier.weight(1f)) { RequirementItem("Simbol (!@#$)", hasSymbol, isDark) }
+                                    }
+                                    if (password.any { it.isWhitespace() }) {
+                                        RequirementItem("Tidak mengandung spasi", hasNoSpace, isDark)
+                                    }
                                 }
                             }
 
@@ -281,68 +320,54 @@ fun RegisterScreen(
 
                             Spacer(modifier = Modifier.height(8.dp))
 
-                            // Register Button
+                            // Register Button - Gradient
                             Button(
                                 onClick = {
                                     focusManager.clearFocus()
-                                    registerViewModel.register(username, password)
+                                    registerViewModel.register(username, password, email)
                                 },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(56.dp)
-                                    .shadow(12.dp, CircleShape, spotColor = if(isFormValid) primaryColor.copy(alpha = 0.5f) else Color.Transparent),
+                                modifier = Modifier.fillMaxWidth().height(58.dp),
                                 enabled = registerUiState !is RegisterUiState.Loading && isFormValid,
-                                shape = CircleShape,
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = primaryColor,
-                                    contentColor = Color.White,
-                                    disabledContainerColor = if(isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.1f),
-                                    disabledContentColor = textSecondary.copy(alpha = 0.5f)
-                                )
+                                shape = RoundedCornerShape(24.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = Color.White)
                             ) {
-                                if (registerUiState is RegisterUiState.Loading) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(24.dp),
-                                        color = Color.White,
-                                        strokeWidth = 2.dp
-                                    )
-                                } else {
-                                    Text("Daftar Sekarang", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+                                Box(
+                                    modifier = Modifier.fillMaxSize()
+                                        .background(Brush.horizontalGradient(listOf(primaryColor, Color(0xFF059669))), RoundedCornerShape(24.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (registerUiState is RegisterUiState.Loading) {
+                                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White, strokeWidth = 2.dp)
+                                    } else {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text("Daftar Sekarang", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                                            Spacer(Modifier.width(8.dp))
+                                            Icon(Icons.Default.ArrowForward, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                                        }
+                                    }
                                 }
+                            }
+
+                            // Footer - inside card
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Text("Sudah punya akun? ", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = textSecondary)
+                                Text(
+                                    text = "Masuk Sini",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = primaryColor,
+                                    modifier = Modifier.clickable { onNavigateToLogin() }
+                                )
                             }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(32.dp))
-
-                // Footer
-                AnimatedVisibility(
-                    visible = visible,
-                    enter = fadeIn(tween(800, delayMillis = 600))
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(glassColor.copy(alpha = 0.3f))
-                            .border(0.5.dp, glassBorderColor, RoundedCornerShape(12.dp))
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Sudah punya akun? ",
-                            fontSize = 14.sp,
-                            color = textSecondary
-                        )
-                        Text(
-                            text = "Masuk",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = primaryColor,
-                            modifier = Modifier.clickable { onNavigateToLogin() }
-                        )
-                    }
-                }
+                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }

@@ -181,6 +181,24 @@ class TransactionRepository(private val apiService: ApiService) {
         }
     }
 
+    suspend fun getAiInsight(userId: Int, period: String): Result<String> {
+        return try {
+            val response = apiService.getAiInsight(period)
+            if (response.isSuccessful && response.body()?.success == true) {
+                val insight = response.body()?.insight
+                if (insight != null) {
+                    Result.success(insight)
+                } else {
+                    Result.failure(Exception("Insight kosong dari server"))
+                }
+            } else {
+                Result.failure(Exception(response.body()?.message ?: "Gagal memuat AI Insight: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun getBudgetKategori(userId: Int): Result<List<BudgetKategoriItem>> {
         return try {
             val response = apiService.getMyBudgetKategori()

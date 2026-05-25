@@ -49,7 +49,7 @@ object SkeletonDefaults {
     // Chart dimensions
     val ChartHeight: Dp = 200.dp
     
-    // Spacing
-    val ItemSpacing: Dp = 8.dp
-    val SectionSpacing: Dp = 16.dp
+    // Spacing (aligned with KassakuSpacing)
+    val ItemSpacing: Dp = 12.dp
+    val SectionSpacing: Dp = 20.dp
 }

@@ -2,7 +2,6 @@ package com.example.kassaku.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -13,10 +12,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.kassaku.data.remote.model.StatistikData
+import com.example.kassaku.ui.theme.KassakuSpacing
 import com.example.kassaku.ui.theme.*
 
 /**
@@ -30,28 +31,30 @@ fun MiniTrendChart(
     modifier: Modifier = Modifier
 ) {
     val isDark = LocalIsDark.current
-    val surfaceColor = if (isDark) iOSGroupedBackgroundDark else iOSGroupedBackgroundLight
-    val labelColor = if (isDark) iOSLabelDark else iOSLabelLight
-    val secondaryLabelColor = if (isDark) iOSSecondaryLabelDark else iOSSecondaryLabelLight
+    val surfaceColor = if (isDark) Color(0xFF1F2937) else Color.White
+    val borderColor = if (isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFE2E8F0)
+    val labelColor = if (isDark) Color.White else Color(0xFF1E293B)
+    val secondaryLabelColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
     
     Card(
         modifier = modifier
             .fillMaxWidth()
             .shadow(
                 elevation = 4.dp,
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(28.dp),
                 spotColor = PremiumShadowPrimary,
                 ambientColor = PremiumShadowSecondary
             )
             .clickable { onChartClick() },
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(containerColor = surfaceColor),
+        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp)
+                .padding(KassakuSpacing.cardInnerLarge)
         ) {
             // Header
             Row(
@@ -62,9 +65,9 @@ fun MiniTrendChart(
                 Text(
                     text = "Tren 6 Bulan",
                     style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Black,
                     color = labelColor,
-                    letterSpacing = (-0.2).sp
+                    letterSpacing = 0.sp
                 )
                 
                 // Legend
@@ -77,7 +80,7 @@ fun MiniTrendChart(
                 }
             }
             
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(KassakuSpacing.elementGap + 4.dp))
             
             // Mini Chart
             if (statistikData != null && statistikData.labels.isNotEmpty()) {
@@ -102,9 +105,9 @@ fun MiniTrendChart(
                             Row(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .padding(horizontal = 2.dp),
+                                    .padding(horizontal = 4.dp),
                                 verticalAlignment = Alignment.Bottom,
-                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 // Income bar
                                 val incomeHeight = (statistikData.pemasukan.getOrElse(index) { 0.0 } / maxVal)
@@ -172,11 +175,10 @@ fun MiniTrendChart(
             
             Spacer(modifier = Modifier.height(12.dp))
             
-            // Footer hint
             Text(
-                text = "Ketuk untuk lihat detail →",
+                text = "Lihat detail statistik",
                 fontSize = 12.sp,
-                fontWeight = FontWeight.Normal,
+                fontWeight = FontWeight.Bold,
                 color = StitchPrimary,
                 modifier = Modifier.align(Alignment.End)
             )

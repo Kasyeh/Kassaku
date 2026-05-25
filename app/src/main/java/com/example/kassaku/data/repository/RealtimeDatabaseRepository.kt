@@ -17,18 +17,19 @@ class RealtimeDatabaseRepository {
     /**
      * Listen to user balance updates in real-time
      */
-    fun getUserBalanceFlow(userId: Int): Flow<Double?> = callbackFlow {
-        val balanceRef = database.getReference("users/$userId/balance/saldo")
+    fun getUserBalanceFlow(userId: Int): Flow<Map<String, Any>?> = callbackFlow {
+        val balanceRef = database.getReference("users/$userId/balance")
+        Log.d(TAG, "Listening to balance at: users/$userId/balance")
 
         val listener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val balance = snapshot.getValue(Double::class.java)
-                Log.d(TAG, "Balance updated: $balance")
-                trySend(balance)
+                val data = snapshot.value as? Map<String, Any>
+                Log.d(TAG, "Balance data received: $data")
+                trySend(data)
             }
 
             override fun onCancelled(error: DatabaseError) {
-                Log.e(TAG, "Balance listener cancelled: ${error.message}")
+                Log.e(TAG, "Balance listener cancelled: ${error.message} (Code: ${error.code})")
                 trySend(null)
             }
         }

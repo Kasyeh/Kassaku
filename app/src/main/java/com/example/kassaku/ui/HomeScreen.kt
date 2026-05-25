@@ -8,6 +8,12 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.InfiniteTransition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
@@ -16,23 +22,35 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Analytics
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.ReceiptLong
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.ShoppingBag
+import androidx.compose.material.icons.rounded.SmartToy
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.Stars
 import androidx.compose.material.icons.rounded.TrendingUp
 import androidx.compose.material.icons.rounded.Work
+import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -53,21 +71,27 @@ import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.rememberNavController
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.TextStyle
 import com.example.kassaku.ui.components.BottomNavItem
 import com.example.kassaku.data.remote.model.BalanceData
 import com.example.kassaku.data.remote.model.RiwayatItem
 import com.example.kassaku.data.remote.model.StatistikData
-import com.example.kassaku.ui.components.LogoutConfirmationDialog
+import com.example.kassaku.data.remote.model.MotivasiItem
 import com.example.kassaku.ui.components.formatCurrencyFlexible
+import com.example.kassaku.ui.components.notifications.NotificationInboxSheet
+import com.example.kassaku.ui.theme.KassakuSpacing
 import com.example.kassaku.ui.theme.*
 import com.example.kassaku.viewmodel.HomeViewModel
+import com.example.kassaku.viewmodel.NotificationUiState
 import com.example.kassaku.viewmodel.PemasukanResult
 import com.example.kassaku.viewmodel.PengeluaranResult
 import com.example.kassaku.viewmodel.RiwayatUiState
@@ -76,6 +100,8 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
+import java.util.Date
+import java.text.SimpleDateFormat
 import kotlin.math.abs
 import com.example.kassaku.ui.components.skeleton.HomeScreenSkeleton
 import com.example.kassaku.ui.components.skeleton.SkeletonTransactionList
@@ -83,10 +109,14 @@ import com.example.kassaku.ui.components.form.TransactionFormSheet
 import com.example.kassaku.ui.components.form.TransactionFormState
 import com.example.kassaku.ui.components.form.TransactionFormData
 import com.example.kassaku.ui.components.FinancialInsightCard
+import com.example.kassaku.ui.components.HeroTotalBalanceCard
 import com.example.kassaku.ui.components.MiniTrendChart
+import com.example.kassaku.ui.components.ConfettiEffect
 import com.example.kassaku.utils.formatDisplayDate
 import com.example.kassaku.utils.formatDisplayTime
+import com.example.kassaku.ui.components.SmartNudgeCard
 import com.example.kassaku.utils.BalanceVisibilityPreferences
+import com.example.kassaku.utils.isEmulator
 
 // Data model for simplified transaction usage
 data class Transaction(
@@ -101,6 +131,9 @@ data class Transaction(
 enum class TransactionType {
     INCOME, EXPENSE
 }
+
+// Track if welcome dialog has been shown this app session
+private var hasShownWelcomeThisSession = false
 
 class ThousandSeparatorVisualTransformation : VisualTransformation {
     override fun filter(text: AnnotatedString): TransformedText {
@@ -123,41 +156,48 @@ class ThousandSeparatorVisualTransformation : VisualTransformation {
     }
 }
 
-
-
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
 @Composable
 fun HomeScreen(
     userId: Int,
     homeViewModel: HomeViewModel,
     navController: NavController,
+    openNotificationInboxSignal: Int = 0,
     onLogout: () -> Unit
 ) {
     val context = LocalContext.current
     val isDark = LocalIsDark.current
     var showPemasukanSheet by remember { mutableStateOf(false) }
     var showPengeluaranSheet by remember { mutableStateOf(false) }
-    var showLogoutDialog by remember { mutableStateOf(false) }
     var showTargetDialog by remember { mutableStateOf(false) }
     var showOverBudgetAlert by remember { mutableStateOf(false) }
     var hasShownOverBudgetAlert by remember { mutableStateOf(false) }
+    var showNotificationSheet by remember { mutableStateOf(false) }
+    val hapticManager = remember { com.example.kassaku.utils.HapticManager(context) }
     
     // Form states
     var pemasukanFormState by remember { mutableStateOf<TransactionFormState>(TransactionFormState.Idle) }
     var pengeluaranFormState by remember { mutableStateOf<TransactionFormState>(TransactionFormState.Idle) }
+    var showConfetti by remember { mutableStateOf(false) }
+    
+    // Welcome Greeting States
+    var showWelcomeDialog by remember { mutableStateOf(false) }
+    val isNewUser = remember { mutableStateOf(false) }
 
     // iOS-inspired Colors
     val backgroundColor = if (isDark) iOSBackgroundDark else iOSBackgroundLight
     val surfaceColor = if (isDark) iOSGroupedBackgroundDark else iOSGroupedBackgroundLight
     val labelColor = if (isDark) iOSLabelDark else iOSLabelLight
     val secondaryLabelColor = if (isDark) iOSSecondaryLabelDark else iOSSecondaryLabelLight
-    val accentColor = StitchPrimary // Keep teal as single accent
+    val accentColor = StitchPrimary
     val accentRed = StitchAccentRed
 
     LaunchedEffect(key1 = homeViewModel) {
         launch {
             homeViewModel.pemasukanResult.collectLatest { result ->
                 if (result is PemasukanResult.Success) {
+                    hapticManager.success()
+                    showConfetti = true
                     Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
                     homeViewModel.resetPemasukanResult()
                     pemasukanFormState = TransactionFormState.Success
@@ -174,6 +214,8 @@ fun HomeScreen(
         launch {
             homeViewModel.pengeluaranResult.collectLatest { result ->
                 if (result is PengeluaranResult.Success) {
+                    hapticManager.success()
+                    showConfetti = true
                     Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
                     homeViewModel.resetPengeluaranResult()
                     pengeluaranFormState = TransactionFormState.Success
@@ -210,7 +252,10 @@ fun HomeScreen(
     val balanceData by homeViewModel.balanceData.collectAsStateWithLifecycle()
     val riwayatUiState by homeViewModel.riwayatUiState.collectAsStateWithLifecycle()
     val statistikData by homeViewModel.statistikData.collectAsStateWithLifecycle()
-    val targetPengeluaranResult by homeViewModel.targetPengeluaranResult.collectAsStateWithLifecycle()
+    val notificationUiState by homeViewModel.notificationUiState.collectAsStateWithLifecycle()
+    val notificationUnreadCount by homeViewModel.notificationUnreadCount.collectAsStateWithLifecycle()
+    val smartNudges by homeViewModel.smartNudges.collectAsStateWithLifecycle()
+    val isHomeRefreshing by homeViewModel.isHomeRefreshing.collectAsStateWithLifecycle()
     val username = balanceData?.username ?: "User"
     val balanceVisibilityPreferences = remember(context) { BalanceVisibilityPreferences(context) }
     var isBalanceVisible by rememberSaveable {
@@ -227,10 +272,21 @@ fun HomeScreen(
             homeViewModel.loadBalanceData(userId)
             homeViewModel.fetchRiwayatTransaksi(userId)
             homeViewModel.fetchStatistik(userId)
+            homeViewModel.fetchNotifications()
+            if (!hasShownWelcomeThisSession) {
+                showWelcomeDialog = true
+                hasShownWelcomeThisSession = true
+            }
         }
     }
 
-    // Check for over budget when balance data is loaded
+    LaunchedEffect(openNotificationInboxSignal) {
+        if (openNotificationInboxSignal > 0) {
+            showNotificationSheet = true
+            homeViewModel.fetchNotifications()
+        }
+    }
+
     LaunchedEffect(balanceData) {
         val data = balanceData
         if (data != null && data.isOverBudget && !hasShownOverBudgetAlert) {
@@ -259,24 +315,76 @@ fun HomeScreen(
         }
     }
 
+    val incomeVal = balanceData?.pemasukan?.toDoubleOrNull() ?: 0.0
+    val expenseVal = balanceData?.pengeluaran?.toDoubleOrNull() ?: 0.0
+    val isExpenseHigherThanIncome = expenseVal > incomeVal && incomeVal > 0
+
+    val greetingDate = remember {
+        SimpleDateFormat("EEEE, d MMMM", Locale("id", "ID")).format(Date())
+    }
+    val isInitialLoading = balanceData == null && userId != 0
+
+    val isEmulator = remember { isEmulator() }
+    val infiniteTransition = rememberInfiniteTransition(label = "expenseBlink")
+    val overspendingAlpha by if (isEmulator) {
+        remember { mutableStateOf(0.7f) }
+    } else {
+        infiniteTransition.animateFloat(
+            initialValue = 1f,
+            targetValue = 0.35f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(450, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "expenseAlpha"
+        )
+    }
+
+    if (isInitialLoading) {
+        HomeScreenSkeleton(
+            modifier = Modifier.fillMaxSize(),
+            isDarkTheme = isDark
+        )
+        return
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(backgroundColor)
     ) {
-        // iOS-style: No colored header background, clean minimalist look
-
-        Column(modifier = Modifier.fillMaxSize()) {
-            // iOS-style Header with Large Title
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .statusBarsPadding()
+        val pullRefreshState = rememberPullRefreshState(
+            refreshing = isHomeRefreshing,
+            onRefresh = {
+                if (userId != 0) {
+                    hapticManager.lightTick()
+                    homeViewModel.refreshHomeScreen(userId)
+                }
+            }
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pullRefresh(pullRefreshState)
+        ) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    start = KassakuSpacing.screenHorizontal,
+                    end = KassakuSpacing.screenHorizontal,
+                    top = KassakuSpacing.screenVertical,
+                    bottom = KassakuSpacing.listBottom
+                ),
+                verticalArrangement = Arrangement.spacedBy(KassakuSpacing.cardGap)
             ) {
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                    ) {
                 Spacer(modifier = Modifier.height(8.dp))
                 
-                // Professional Finance Header
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -284,55 +392,131 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
-                        Text(
-                            text = "Assalamu'alaikum,",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = secondaryLabelColor,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = username,
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = labelColor,
-                            fontWeight = FontWeight.Bold 
-                        )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        val avatarUrl = balanceData?.avatar
+                        val initial = if (username.isNotEmpty()) username.take(1).uppercase() else "?"
+                        
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(Brush.linearGradient(listOf(StitchPrimary, Color(0xFF60A5FA))))
+                                .padding(2.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(CircleShape)
+                                    .background(surfaceColor),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (avatarUrl != null) {
+                                    AsyncImage(
+                                        model = avatarUrl,
+                                        contentDescription = "Avatar",
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else {
+                                    Text(
+                                        text = initial,
+                                        style = TextStyle(
+                                            fontSize = 20.sp,
+                                            fontWeight = FontWeight.Black,
+                                            brush = Brush.linearGradient(listOf(StitchPrimary, Color(0xFF60A5FA)))
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Column {
+                            Text(
+                                text = greetingDate.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale("id", "ID")) else it.toString() },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = secondaryLabelColor,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Assalamu'alaikum,",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = secondaryLabelColor,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = username,
+                                style = MaterialTheme.typography.titleLarge,
+                                color = labelColor,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                     
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(KassakuSpacing.elementGap)
                     ) {
                         IconButton(
-                            onClick = { /* Notification Action */ },
+                            onClick = {
+                                showNotificationSheet = true
+                                homeViewModel.fetchNotifications()
+                            },
                             modifier = Modifier
                                 .size(40.dp)
                                 .border(1.dp, color = secondaryLabelColor.copy(alpha = 0.2f), shape = CircleShape)
                         ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Notifications,
-                                contentDescription = "Notifikasi",
-                                tint = labelColor,
-                                modifier = Modifier.size(20.dp)
-                            )
+                            Box(contentAlignment = Alignment.TopEnd) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Notifications,
+                                    contentDescription = "Notifikasi",
+                                    tint = labelColor,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                if (notificationUnreadCount > 0) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(17.dp)
+                                            .background(StitchNegative, CircleShape)
+                                            .border(2.dp, surfaceColor, CircleShape)
+                                            .align(Alignment.TopEnd),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = if (notificationUnreadCount > 99) "99+" else notificationUnreadCount.toString(),
+                                            color = Color.White,
+                                            fontSize = 8.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
                         }
                         IconButton(
-                            onClick = { showLogoutDialog = true },
+                            onClick = { navController.navigate("chatbot") },
                             modifier = Modifier
-                                .size(40.dp)
+                                .size(44.dp)
                                 .border(1.dp, color = secondaryLabelColor.copy(alpha = 0.2f), shape = CircleShape)
                         ) {
                             Icon(
-                                imageVector = Icons.Filled.ExitToApp,
-                                contentDescription = "Logout",
+                                imageVector = Icons.Rounded.SmartToy,
+                                contentDescription = "Asisten AI",
                                 tint = labelColor,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(22.dp)
                             )
                         }
                     }
                 }
                 
-                // Premium Balance Card
                 AnimatedVisibility(
                     visible = isVisible,
                     enter = slideInVertically(
@@ -340,295 +524,126 @@ fun HomeScreen(
                         animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing)
                     ) + fadeIn(animationSpec = tween(durationMillis = 400))
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .shadow(
-                                elevation = 16.dp,
-                                shape = RoundedCornerShape(24.dp),
-                                spotColor = PremiumShadowPrimary,
-                                ambientColor = PremiumShadowSecondary
-                            )
-                            .clip(RoundedCornerShape(24.dp))
-                            .background(
-                                brush = Brush.verticalGradient(
-                                    colors = if (isDark) 
-                                        listOf(FinanceCardGradientDarkStart, FinanceCardGradientDarkEnd)
-                                    else 
-                                        listOf(FinanceCardGradientStart, FinanceCardGradientEnd)
-                                )
-                            )
-                    ) {
-                         // Subtle background pattern or decoration could go here
-                        
-                        Column(
-                            modifier = Modifier.padding(24.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "Uang Saya",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = secondaryLabelColor,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                IconButton(
-                                    onClick = {
-                                        isBalanceVisible = !isBalanceVisible
-                                        balanceVisibilityPreferences.setHomeBalanceVisible(isBalanceVisible)
-                                    }
-                                ) {
-                                    Icon(
-                                        imageVector = if (isBalanceVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                        contentDescription = if (isBalanceVisible) "Sembunyikan saldo" else "Tampilkan saldo",
-                                        tint = secondaryLabelColor
-                                    )
-                                }
-                            }
-                            
-                            Spacer(modifier = Modifier.height(8.dp))
-                            
-                            val currentBalance = balanceData?.saldo?.toDoubleOrNull() ?: 0.0
-                            if (isBalanceVisible) {
-                                AnimatedCurrency(
-                                    amount = currentBalance,
-                                    style = MaterialTheme.typography.displayMedium.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = (-1).sp
-                                    ),
-                                    color = labelColor
-                                )
-                            } else {
-                                Text(
-                                    text = "Rp •••••••",
-                                    style = MaterialTheme.typography.displayMedium.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = (-1).sp
-                                    ),
-                                    color = labelColor
-                                )
-                            }
+                    val currentBalance = balanceData?.saldo?.toDoubleOrNull() ?: 0.0
+                    val currencyCode = balanceData?.currency ?: "IDR"
+                    val currencyFormat = balanceData?.currencyFormat ?: "standard"
+                    HeroTotalBalanceCard(
+                        balance = currentBalance,
+                        income = balanceData?.pemasukan?.toDoubleOrNull() ?: 0.0,
+                        expense = balanceData?.pengeluaran?.toDoubleOrNull() ?: 0.0,
+                        targetExpense = balanceData?.targetPengeluaran?.toDoubleOrNull(),
+                        currencyCode = currencyCode,
+                        currencyFormat = currencyFormat,
+                        isBalanceVisible = isBalanceVisible,
+                        isExpenseHigherThanIncome = isExpenseHigherThanIncome,
+                        overspendingAlpha = overspendingAlpha,
+                        isDark = isDark,
+                        onToggleVisibility = {
+                            isBalanceVisible = !isBalanceVisible
+                            balanceVisibilityPreferences.setHomeBalanceVisible(isBalanceVisible)
+                        },
+                        onExpenseSectionClick = { showTargetDialog = true }
+                    )
+                }
 
-                            Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
-                            // Summary Row
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
-                                // Income
-                                val income = balanceData?.pemasukan?.toDoubleOrNull() ?: 0.0
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(20.dp)
-                                                .background(accentColor.copy(alpha = 0.1f), CircleShape),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.ArrowDownward,
-                                                contentDescription = null,
-                                                tint = accentColor,
-                                                modifier = Modifier.size(12.dp)
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = "Uang Masuk",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = secondaryLabelColor
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = formatCurrencyFlexible(income),
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = labelColor
-                                    )
-                                }
-
-                                // Separator
-                                Box(
-                                    modifier = Modifier
-                                        .width(1.dp)
-                                        .height(40.dp)
-                                        .background(if (isDark) iOSSeparatorDark else iOSSeparatorLight)
-                                )
-
-                                // Expense
-                                val expense = balanceData?.pengeluaran?.toDoubleOrNull() ?: 0.0
-                                val target = balanceData?.targetPengeluaran?.toDoubleOrNull()
-                                
-                                Column(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .clickable { showTargetDialog = true }
-                                        .padding(4.dp)
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(20.dp)
-                                                .background(accentRed.copy(alpha = 0.1f), CircleShape),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.ArrowUpward,
-                                                contentDescription = null,
-                                                tint = accentRed,
-                                                modifier = Modifier.size(12.dp)
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = "Uang Keluar",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = secondaryLabelColor
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = formatCurrencyFlexible(expense),
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = labelColor
-                                    )
-                                    
-                                    // Target Progress
-                                    if (target != null && target > 0) {
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        val progress = (expense / target).toFloat().coerceIn(0f, 1f)
-                                        LinearProgressIndicator(
-                                            progress = { progress },
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(2.dp)
-                                                .clip(RoundedCornerShape(1.dp)),
-                                            color = if (progress >= 1f) accentRed else accentRed.copy(alpha = 0.7f),
-                                            trackColor = accentRed.copy(alpha = 0.1f)
-                                        )
-                                    } else {
-                                        // Hint to set target
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        Text(
-                                            text = "Atur Batas",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = accentColor,
-                                            fontSize = 10.sp
-                                        )
-                                    }
-                                }
-                            }
-                        }
+                HomePrimaryActionsRow(
+                    onIncomeClick = {
+                        hapticManager.lightTick()
+                        showPemasukanSheet = true
+                    },
+                    onExpenseClick = {
+                        hapticManager.lightTick()
+                        showPengeluaranSheet = true
+                    }
+                )
                     }
                 }
-            } // Header Column Closes
-            
-            Spacer(modifier = Modifier.height(16.dp))
 
-            // Quick Actions & List with iOS spacing
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Action Buttons - iOS style
-                item {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            ActionButton(
-                                text = "Uang Masuk",
-                                icon = Icons.Rounded.Add,
-                                backgroundColor = accentColor,
-                                contentColor = Color.White,
-                                onClick = { showPemasukanSheet = true },
-                                modifier = Modifier.weight(1f)
-                            )
-
-                            ActionButton(
-                                text = "Uang Keluar",
-                                icon = Icons.Rounded.Remove,
-                                backgroundColor = accentRed,
-                                contentColor = Color.White,
-                                onClick = { showPengeluaranSheet = true },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-
-                        ActionButton(
-                            text = "Tambah Tabungan",
-                            icon = Icons.Filled.Paid,
-                            backgroundColor = StitchPrimary,
-                            contentColor = Color.White,
-                            onClick = {
-                                navController.navigate(BottomNavItem.Impian.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
+                // Tampilkan Smart Nudges jika ada
+                if (smartNudges.isNotEmpty()) {
+                    items(smartNudges.size) { index ->
+                        SmartNudgeCard(
+                            nudge = smartNudges[index],
+                            isDark = isDark,
+                            onActionClick = { actionType ->
+                                when (actionType) {
+                                    "NAVIGATE_IMPIAN", "NAVIGATE_TABUNGAN" -> {
+                                        navController.navigate(com.example.kassaku.ui.components.BottomNavItem.Impian.route) {
+                                            popUpTo(com.example.kassaku.AppDestinations.HOME_ROUTE) {
+                                                saveState = true
+                                            }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    }
+                                    "NAVIGATE_RIWAYAT" -> {
+                                        navController.navigate(com.example.kassaku.ui.components.BottomNavItem.Riwayat.route) {
+                                            popUpTo(com.example.kassaku.AppDestinations.HOME_ROUTE) {
+                                                saveState = true
+                                            }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    }
+                                    "NAVIGATE_ADD_TRANSACTION" -> showPengeluaranSheet = true
                                 }
-                            },
-                            modifier = Modifier.fillMaxWidth()
+                            }
                         )
                     }
                 }
 
-                // Financial Insight Card - iOS Finance style
+                // Tampilkan Motivasi Slider
+                val data = statistikData
+                if (data != null && !data.motivasi.isNullOrEmpty()) {
+                    item {
+                        MotivationCarousel(
+                            motivasi = data.motivasi,
+                            isDark = isDark
+                        )
+                    }
+                }
+
+                item {
+                    HomeSectionTitle(title = "Jelajahi Fitur")
+                }
+                item {
+                    HomeExploreRow(
+                        isDark = isDark,
+                        onNavigate = { route ->
+                            navController.navigate(route) {
+                                popUpTo(com.example.kassaku.AppDestinations.HOME_ROUTE) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
+                    )
+                }
+                item {
+                    HomeSectionTitle(title = "Ringkasan Keuangan")
+                }
                 item {
                     val income = balanceData?.pemasukan?.toDoubleOrNull() ?: 0.0
                     val expense = balanceData?.pengeluaran?.toDoubleOrNull() ?: 0.0
-                    
-                    AnimatedVisibility(
-                        visible = isVisible,
-                        enter = slideInVertically(
-                            initialOffsetY = { 40 },
-                            animationSpec = tween(durationMillis = 500, delayMillis = 200)
-                        ) + fadeIn(animationSpec = tween(durationMillis = 500, delayMillis = 200))
-                    ) {
-                        FinancialInsightCard(
-                            statistikData = statistikData,
-                            currentMonthExpense = expense,
-                            currentMonthIncome = income
-                        )
+                    AnimatedVisibility(visible = isVisible) {
+                        FinancialInsightCard(statistikData = statistikData, currentMonthExpense = expense, currentMonthIncome = income)
                     }
                 }
-
-                // Mini Trend Chart - Compact 6-month view
                 item {
-                    AnimatedVisibility(
-                        visible = isVisible,
-                        enter = slideInVertically(
-                            initialOffsetY = { 40 },
-                            animationSpec = tween(durationMillis = 500, delayMillis = 300)
-                        ) + fadeIn(animationSpec = tween(durationMillis = 500, delayMillis = 300))
-                    ) {
-                        MiniTrendChart(
-                            statistikData = statistikData,
-                            onChartClick = {
-                                navController.navigate(BottomNavItem.Statistik.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            }
-                        )
+                    AnimatedVisibility(visible = isVisible) {
+                        MiniTrendChart(statistikData = statistikData, onChartClick = { navController.navigate(BottomNavItem.Statistik.route) {
+                                            popUpTo(com.example.kassaku.AppDestinations.HOME_ROUTE) {
+                                                saveState = true
+                                            }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        } })
                     }
                 }
-
-                // iOS Section Header - Transaksi Terbaru
                 item {
-                    Spacer(modifier = Modifier.height(8.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -636,488 +651,444 @@ fun HomeScreen(
                     ) {
                         Text(
                             text = "Catatan Terbaru",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = labelColor,
-                            letterSpacing = 0.sp
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Black,
+                            color = labelColor
                         )
-                        Text(
-                            text = "Lihat Semua",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Normal,
-                            color = accentColor,
-                            modifier = Modifier.clickable {
-                                navController.navigate(BottomNavItem.Riwayat.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            }
-                        )
+                        Text(text = "Lihat Semua", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = accentColor, modifier = Modifier.clickable { navController.navigate(BottomNavItem.Riwayat.route) {
+                                            popUpTo(com.example.kassaku.AppDestinations.HOME_ROUTE) {
+                                                saveState = true
+                                            }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        } })
                     }
                 }
-
-                // Transaction List
                 when (riwayatUiState) {
-                    is RiwayatUiState.Loading, is RiwayatUiState.Idle -> {
-                        item { 
-                            SkeletonTransactionList(
-                                itemCount = 3,
-                                isDarkTheme = isDark,
-                                modifier = Modifier.padding(vertical = 4.dp)
-                            )
-                        }
-                    }
+                    is RiwayatUiState.Loading, is RiwayatUiState.Idle -> { item { SkeletonTransactionList(itemCount = 3, isDarkTheme = isDark) } }
                     is RiwayatUiState.Success -> {
                         if (transactions.isEmpty()) {
-                            // iOS-style aesthetic empty state
-                            item {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 48.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(64.dp)
-                                            .background(
-                                                secondaryLabelColor.copy(alpha = 0.08f),
-                                                RoundedCornerShape(16.dp)
-                                            ),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            Icons.Rounded.ReceiptLong, 
-                                            contentDescription = null, 
-                                            tint = secondaryLabelColor.copy(alpha = 0.5f), 
-                                            modifier = Modifier.size(32.dp)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Text(
-                                        text = "Belum ada catatan",
-                                        fontSize = 17.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = labelColor
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = "Catatan keuanganmu akan muncul di sini",
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Normal,
-                                        color = secondaryLabelColor
-                                    )
-                                }
-                            }
+                            item { Column(modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) { Icon(Icons.Rounded.ReceiptLong, null, tint = secondaryLabelColor.copy(alpha = 0.5f), modifier = Modifier.size(64.dp)); Spacer(modifier = Modifier.height(16.dp)); Text("Belum ada catatan", fontWeight = FontWeight.Medium, color = labelColor) } }
                         } else {
-                            itemsIndexed(transactions) { index, transaction ->
-                                AnimatedVisibility(
-                                    visible = isVisible,
-                                    enter = slideInVertically(
-                                        initialOffsetY = { 50 },
-                                        animationSpec = tween(durationMillis = 500, delayMillis = index * 100)
-                                    ) + fadeIn(animationSpec = tween(durationMillis = 500, delayMillis = index * 100))
-                                ) {
-                                    TransactionItemCard(transaction = transaction, isDark = isDark)
-                                }
-                            }
+                            itemsIndexed(transactions) { _, transaction -> TransactionItemCard(transaction = transaction, isDark = isDark, currencyCode = balanceData?.currency ?: "IDR", currencyFormat = balanceData?.currencyFormat ?: "standard") }
                         }
                     }
-                    is RiwayatUiState.Error -> {
-                        item { Text("Gagal memuat data", color = MaterialTheme.colorScheme.error) }
-                    }
+                    is RiwayatUiState.Error -> { item { Text("Gagal memuat data", color = MaterialTheme.colorScheme.error) } }
                 }
             }
-        } // Main Column for the screen content closes here
+            PullRefreshIndicator(
+                refreshing = isHomeRefreshing,
+                state = pullRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter),
+                backgroundColor = surfaceColor,
+                contentColor = StitchPrimary
+            )
+        }
 
-        // Over Budget Alert Dialog - iOS Style
+        if (showConfetti) {
+            ConfettiEffect(isActive = true, modifier = Modifier.fillMaxSize())
+            LaunchedEffect(Unit) { kotlinx.coroutines.delay(2500); showConfetti = false }
+        }
+
         if (showOverBudgetAlert) {
             AlertDialog(
                 onDismissRequest = { showOverBudgetAlert = false },
-                icon = {
-                    Box(
-                        modifier = Modifier
-                            .size(56.dp)
-                            .background(accentRed.copy(alpha = 0.1f), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = accentRed,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
-                },
-                title = { 
-                    Text(
-                        "Belanja Melebihi Batas", 
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 17.sp,
-                        textAlign = TextAlign.Center,
-                        color = labelColor,
-                        modifier = Modifier.fillMaxWidth()
-                    ) 
-                },
-                text = {
-                    val expense = balanceData?.pengeluaran?.toDoubleOrNull() ?: 0.0
-                    val target = balanceData?.targetPengeluaran?.toDoubleOrNull() ?: 0.0
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            "Belanja bulan ini sudah melebihi batas yang kamu tetapkan.",
-                            textAlign = TextAlign.Center,
-                            fontSize = 15.sp,
-                            color = secondaryLabelColor,
-                            lineHeight = 20.sp
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            formatCurrencyFlexible(expense),
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = accentRed,
-                            letterSpacing = (-0.5).sp
-                        )
-                        Text(
-                            "dari batas ${formatCurrencyFlexible(target)}",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Normal,
-                            color = secondaryLabelColor
-                        )
-                    }
-                },
-                confirmButton = {
-                    Button(
-                        onClick = { showOverBudgetAlert = false },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = accentColor),
-                        shape = RoundedCornerShape(12.dp),
-                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
-                    ) {
-                        Text(
-                            "Mengerti", 
-                            color = labelColor, 
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 15.sp
-                        )
-                    }
-                },
+                title = { Text("Belanja Melebihi Batas") },
+                text = { Text("Belanja bulan ini sudah melebihi batas yang kamu tetapkan.") },
+                confirmButton = { Button(onClick = { showOverBudgetAlert = false }) { Text("Mengerti") } },
                 shape = RoundedCornerShape(20.dp),
                 containerColor = surfaceColor
             )
         }
 
-        // Set Target Dialog
         if (showTargetDialog) {
-            SetTargetDialog(
-                currentTarget = balanceData?.targetPengeluaran?.toDoubleOrNull() ?: 0.0,
-                onDismissRequest = { showTargetDialog = false },
-                onConfirm = { newTarget ->
-                    showTargetDialog = false
-                    homeViewModel.simpanTargetPengeluaran(userId, newTarget.toLong())
-                }
-            )
+            SetTargetDialog(currentTarget = balanceData?.targetPengeluaran?.toDoubleOrNull() ?: 0.0, onDismissRequest = { showTargetDialog = false }, onConfirm = { newTarget -> showTargetDialog = false; homeViewModel.simpanTargetPengeluaran(userId, newTarget.toLong()) })
         }
 
-        // Pemasukan Form Sheet
-        TransactionFormSheet(
-            isVisible = showPemasukanSheet,
-            isExpense = false,
-            formState = pemasukanFormState,
-            onDismiss = { 
-                showPemasukanSheet = false 
-                pemasukanFormState = TransactionFormState.Idle
-            },
-            onSubmit = { formData ->
-                pemasukanFormState = TransactionFormState.Submitting
-                // Use yyyy-MM-dd HH:mm:ss to preserve time from System.currentTimeMillis()
-                val dateStr = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date(formData.date))
-                homeViewModel.tambahPemasukan(
-                    userId, 
-                    formData.amount.toLong(), 
-                    formData.category.replaceFirstChar { it.uppercase() }, 
-                    formData.notes,
-                    dateStr
-                )
-            }
-        )
+        TransactionFormSheet(isVisible = showPemasukanSheet, isExpense = false, formState = pemasukanFormState, onDismiss = { showPemasukanSheet = false }, onSubmit = { formData -> pemasukanFormState = TransactionFormState.Submitting; homeViewModel.tambahPemasukan(userId, formData.amount.toLong(), formData.category, formData.notes, java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(java.util.Date(formData.date))) })
+        TransactionFormSheet(isVisible = showPengeluaranSheet, isExpense = true, formState = pengeluaranFormState, onDismiss = { showPengeluaranSheet = false }, onSubmit = { formData -> pengeluaranFormState = TransactionFormState.Submitting; homeViewModel.tambahPengeluaran(userId, formData.amount.toLong(), formData.category, formData.notes, java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(java.util.Date(formData.date))) })
+
+        NotificationInboxSheet(isVisible = showNotificationSheet, notificationState = notificationUiState, unreadCount = notificationUnreadCount, onDismiss = { showNotificationSheet = false }, onRetry = { homeViewModel.fetchNotifications() }, onMarkAllRead = { homeViewModel.markAllNotificationsAsRead() }, onItemClick = { })
         
-        // Pengeluaran Form Sheet
-        val budgetedCategories = remember(statistikData) {
-            statistikData?.budgetKategori?.map { budget ->
-                com.example.kassaku.ui.components.form.CategoryOption(
-                    id = budget.id.toString(),
-                    label = budget.kategori.replaceFirstChar { it.uppercase() }
-                )
-            }
-        }
-
-        TransactionFormSheet(
-            isVisible = showPengeluaranSheet,
-            isExpense = true,
-            formState = pengeluaranFormState,
-            customCategories = budgetedCategories,
-            onDismiss = { 
-                showPengeluaranSheet = false 
-                pengeluaranFormState = TransactionFormState.Idle
-            },
-            onSubmit = { formData ->
-                pengeluaranFormState = TransactionFormState.Submitting
-                // Use yyyy-MM-dd HH:mm:ss to preserve time from System.currentTimeMillis()
-                val dateStr = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date(formData.date))
-                homeViewModel.tambahPengeluaran(
-                    userId, 
-                    formData.amount.toLong(), 
-                    formData.category.replaceFirstChar { it.uppercase() }, 
-                    formData.notes,
-                    dateStr
-                )
-            }
-        )
-
-        // Logout Confirmation Dialog
-        if (showLogoutDialog) {
-            LogoutConfirmationDialog(
-                onDismissRequest = { showLogoutDialog = false },
-                onConfirm = {
-                    showLogoutDialog = false
-                    homeViewModel.logout()
-                },
-                isDark = isDark
-            )
+        if (showWelcomeDialog) {
+            WelcomeGreetingDialog(username = username, avatarUrl = balanceData?.avatar, isNewUser = isNewUser.value, onDismiss = { showWelcomeDialog = false })
         }
     }
 }
-
-
-
-
-
-
-@Composable
-fun ActionButton(
-    text: String,
-    icon: ImageVector,
-    backgroundColor: Color,
-    contentColor: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    // iOS-style: Slimmer button with subtle appearance
-    Button(
-        onClick = onClick,
-        modifier = modifier.height(56.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = backgroundColor,
-            contentColor = contentColor
-        ),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-        elevation = ButtonDefaults.buttonElevation(
-            defaultElevation = 0.dp,
-            pressedElevation = 0.dp
-        )
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(
-                imageVector = icon, 
-                contentDescription = null, 
-                tint = contentColor, 
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = text.replace("\n", " "),
-                color = contentColor,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = (-0.2).sp
-            )
-        }
-    }
-}
-
-@Composable
-fun TransactionItemCard(transaction: Transaction, isDark: Boolean) {
-    val isIncome = transaction.type == TransactionType.INCOME
-    val labelColor = if (isDark) iOSLabelDark else iOSLabelLight
-    val secondaryLabel = if (isDark) iOSSecondaryLabelDark else iOSSecondaryLabelLight
-    val surfaceColor = if (isDark) iOSGroupedBackgroundDark else iOSGroupedBackgroundLight
-    
-    val accentColor = if (isIncome) StitchPrimary else StitchAccentRed
-    
-    // Clean, flat list item design
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { /* Detail view if needed */ }
-            .padding(vertical = 12.dp, horizontal = 4.dp), // Less horizontal padding as it's in a list
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Icon Container
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .background(
-                    color = if (isIncome) StitchPrimaryLight else Color(0x33EF4444),
-                    shape = RoundedCornerShape(16.dp)
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = if (isIncome) Icons.Rounded.Add else Icons.Rounded.Remove,
-                contentDescription = null,
-                tint = accentColor,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-        
-        Spacer(modifier = Modifier.width(16.dp))
-        
-        // Transaction Details
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = transaction.name,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = labelColor
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = formatDisplayDate(transaction.date),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = secondaryLabel
-                )
-                if (transaction.time != null) {
-                    Text(
-                        text = " • ${transaction.time}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = secondaryLabel
-                    )
-                }
-            }
-        }
-        
-        // Amount
-        Text(
-            text = "${if (isIncome) "+" else "-"}${formatCurrencyFlexible(abs(transaction.amount))}",
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Bold,
-            color = if (isIncome) BudgetSafeGreen else labelColor
-        )
-    }
-}
-
-
-// Dialogs (Reusing logic)
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SetTargetDialog(
-    currentTarget: Double,
-    onDismissRequest: () -> Unit,
-    onConfirm: (Double) -> Unit
-) {
-    var targetAmount by remember { mutableStateOf(if (currentTarget > 0) currentTarget.toLong().toString() else "") }
-    
+fun WelcomeGreetingDialog(username: String, avatarUrl: String?, isNewUser: Boolean, onDismiss: () -> Unit) {
+    val isDark = LocalIsDark.current
+    val surfaceColor = if (isDark) Color(0xFF1C1C1E) else Color.White
     AlertDialog(
-        onDismissRequest = onDismissRequest,
-        shape = RoundedCornerShape(28.dp),
-        title = { 
-            Text(
-                "Atur Batas Belanja Bulanan", 
-                fontWeight = FontWeight.ExtraBold,
-                style = MaterialTheme.typography.headlineSmall
-            ) 
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    "Atur batas maksimal belanja per bulan untuk membantu mengontrol keuanganmu.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = StitchTextSecondary
-                )
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                OutlinedTextField(
-                    value = targetAmount,
-                    onValueChange = { targetAmount = it.filter { c -> c.isDigit() } },
-                    label = { Text("Batas Belanja") },
-                    placeholder = { Text("Contoh: 500000") },
-                    prefix = { Text("Rp ", fontWeight = FontWeight.Bold) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    visualTransformation = ThousandSeparatorVisualTransformation(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = StitchPrimary,
-                        focusedLabelColor = StitchPrimary
-                    )
-                )
-                
-                Text(
-                    "Kosongkan atau isi 0 untuk menghapus batas.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = StitchTextSecondary.copy(alpha = 0.7f),
-                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-                )
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        content = {
+            Box(modifier = Modifier.fillMaxWidth(0.85f).clip(RoundedCornerShape(28.dp)).background(surfaceColor).padding(24.dp), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(modifier = Modifier.size(100.dp).shadow(20.dp, CircleShape, spotColor = StitchPrimary.copy(alpha = 0.5f)).border(3.dp, StitchPrimary, CircleShape).padding(4.dp).clip(CircleShape)) {
+                        if (avatarUrl != null) {
+                            AsyncImage(model = avatarUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                        } else {
+                            Box(modifier = Modifier.fillMaxSize().background(StitchPrimary.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.Person, null, tint = StitchPrimary, modifier = Modifier.size(50.dp))
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Text(text = if (isNewUser) "Selamat Datang di KasSaku!" else "Selamat Datang Kembali,", style = MaterialTheme.typography.bodyLarge, color = if (isDark) iOSSecondaryLabelDark else iOSSecondaryLabelLight, textAlign = TextAlign.Center)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(text = username, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = if (isDark) iOSLabelDark else iOSLabelLight, textAlign = TextAlign.Center)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(text = if (isNewUser) "Mari mulai kelola keuanganmu dengan lebih pintar dan bijak." else "Senang melihatmu lagi! Yuk cek catatan keuanganmu hari ini.", style = MaterialTheme.typography.bodyMedium, color = if (isDark) iOSSecondaryLabelDark else iOSSecondaryLabelLight, textAlign = TextAlign.Center)
+                    Spacer(modifier = Modifier.height(32.dp))
+                    Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = StitchPrimary)) {
+                        Text("Lanjutkan", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+                }
             }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val amount = targetAmount.toDoubleOrNull() ?: 0.0
-                    onConfirm(amount)
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = StitchPrimary),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("Simpan", color = StitchTextPrimary, fontWeight = FontWeight.Bold)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismissRequest) {
-                Text("Batal", color = StitchTextSecondary)
-            }
-        },
-        containerColor = if(isSystemInDarkTheme()) StitchSurfaceDark else StitchSurfaceLight
+        }
     )
 }
 
-@Preview(showBackground = true)
 @Composable
-fun HomePreview() {
-    // Preview setup
+private fun HomeSectionTitle(
+    title: String,
+    modifier: Modifier = Modifier
+) {
+    val isDark = LocalIsDark.current
+    val labelColor = if (isDark) iOSLabelDark else iOSLabelLight
+    Text(
+        text = title,
+        fontSize = 18.sp,
+        fontWeight = FontWeight.Black,
+        color = labelColor,
+        modifier = modifier.padding(
+            start = KassakuSpacing.sectionTitleInset,
+            top = KassakuSpacing.sectionTitleInset,
+            bottom = KassakuSpacing.elementGap
+        )
+    )
+}
+
+@Composable
+fun HomePrimaryActionsRow(
+    onIncomeClick: () -> Unit,
+    onExpenseClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(KassakuSpacing.elementGap)
+    ) {
+        ActionButton(
+            text = "Pemasukan",
+            icon = Icons.Rounded.Add,
+            backgroundColor = StitchPrimary,
+            contentColor = Color.White,
+            onClick = onIncomeClick,
+            modifier = Modifier.weight(1f)
+        )
+        ActionButton(
+            text = "Pengeluaran",
+            icon = Icons.Rounded.Remove,
+            backgroundColor = StitchAccentRed,
+            contentColor = Color.White,
+            onClick = onExpenseClick,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+private data class HomeExploreItem(
+    val title: String,
+    val icon: ImageVector,
+    val route: String,
+    val tint: Color
+)
+
+@Composable
+fun HomeExploreRow(
+    isDark: Boolean,
+    onNavigate: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val items = listOf(
+        HomeExploreItem("Riwayat", Icons.Rounded.History, BottomNavItem.Riwayat.route, StitchPrimary),
+        HomeExploreItem("Tabungan", Icons.Rounded.Stars, BottomNavItem.Impian.route, Color(0xFF059669)),
+        HomeExploreItem("Ringkasan", Icons.Rounded.Analytics, BottomNavItem.Statistik.route, Color(0xFFD97706)),
+        HomeExploreItem("Profil", Icons.Rounded.AccountCircle, BottomNavItem.Profil.route, Color(0xFF0284C7))
+    )
+    val surface = if (isDark) Color(0xFF1F2937) else Color.White
+    val borderColor = if (isDark) Color.White.copy(alpha = 0.06f) else Color(0xFFE2E8F0)
+    val textColor = if (isDark) Color(0xFFE5E7EB) else Color(0xFF334155)
+
+    LazyRow(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(KassakuSpacing.chipRowGap),
+        contentPadding = PaddingValues(horizontal = KassakuSpacing.sectionTitleInset)
+    ) {
+        items(items) { item ->
+            Card(
+                modifier = Modifier
+                    .width(112.dp)
+                    .height(104.dp)
+                    .clickable { onNavigate(item.route) },
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = surface),
+                border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(KassakuSpacing.elementGap),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(item.tint.copy(alpha = if (isDark) 0.18f else 0.12f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(item.icon, contentDescription = item.title, tint = item.tint, modifier = Modifier.size(22.dp))
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = item.title,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = textColor,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun QuickActionCard(
+    title: String,
+    icon: ImageVector,
+    iconColor: Color,
+    isDark: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val surface = if (isDark) Color(0xFF1F2937) else Color.White
+    val borderColor = if (isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFE2E8F0)
+    val textColor = if (isDark) Color(0xFFE5E7EB) else Color(0xFF334155)
+
+    Card(
+        modifier = modifier
+            .height(124.dp)
+            .shadow(
+                elevation = 5.dp,
+                shape = RoundedCornerShape(24.dp),
+                spotColor = PremiumShadowPrimary,
+                ambientColor = PremiumShadowSecondary
+            )
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = surface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(KassakuSpacing.cardInner),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(iconColor.copy(alpha = if (isDark) 0.14f else 0.10f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, null, tint = iconColor, modifier = Modifier.size(24.dp))
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = title,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = textColor,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+fun FeatureMenuCard(
+    title: String,
+    description: String,
+    icon: ImageVector,
+    gradientColors: List<Color>,
+    isDark: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val surface = if (isDark) Color(0xFF1F2937) else Color.White
+    val borderColor = if (isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFE2E8F0)
+    val labelColor = if (isDark) Color.White else Color(0xFF1E293B)
+    val secondaryColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = 5.dp,
+                shape = RoundedCornerShape(28.dp),
+                spotColor = PremiumShadowPrimary,
+                ambientColor = PremiumShadowSecondary
+            )
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(containerColor = surface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(KassakuSpacing.cardInnerLarge),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .shadow(10.dp, RoundedCornerShape(20.dp), spotColor = gradientColors.last().copy(alpha = 0.30f))
+                    .background(Brush.linearGradient(gradientColors), RoundedCornerShape(20.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, null, tint = Color.White, modifier = Modifier.size(26.dp))
+            }
+            Spacer(modifier = Modifier.width(KassakuSpacing.elementGap + 4.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    fontSize = 16.sp,
+                    lineHeight = 22.sp,
+                    fontWeight = FontWeight.Black,
+                    color = labelColor
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = description,
+                    fontSize = 12.sp,
+                    lineHeight = 18.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = secondaryColor
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ActionButton(text: String, icon: ImageVector, backgroundColor: Color, contentColor: Color, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val gradientColors = if (backgroundColor == StitchPrimary) listOf(Color(0xFF10B981), Color(0xFF059669)) else if (backgroundColor == StitchAccentRed) listOf(Color(0xFFEF4444), Color(0xFFDC2626)) else listOf(backgroundColor, backgroundColor.copy(alpha = 0.85f))
+    Box(modifier = modifier.height(56.dp).shadow(8.dp, RoundedCornerShape(16.dp), spotColor = backgroundColor.copy(alpha = 0.3f)).clip(RoundedCornerShape(16.dp)).background(Brush.horizontalGradient(gradientColors)).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+            Icon(icon, null, tint = contentColor, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(text = text, color = contentColor, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+fun TransactionItemCard(
+    transaction: Transaction,
+    isDark: Boolean,
+    currencyCode: String = "IDR",
+    currencyFormat: String = "compact"
+) {
+    val isIncome = transaction.type == TransactionType.INCOME
+    val surface = if (isDark) Color(0xFF1F2937) else Color.White
+    val borderColor = if (isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFE2E8F0)
+    val labelColor = if (isDark) Color.White else Color(0xFF1E293B)
+    val secondaryLabel = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val accentColor = if (isIncome) StitchPrimary else StitchAccentRed
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(3.dp, RoundedCornerShape(22.dp), spotColor = PremiumShadowPrimary, ambientColor = PremiumShadowSecondary),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = surface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(KassakuSpacing.cardInner),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(modifier = Modifier.size(44.dp).background(if (isIncome) StitchPrimary.copy(alpha = 0.10f) else StitchAccentRed.copy(alpha = 0.10f), RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
+                Icon(if (isIncome) Icons.Rounded.Add else Icons.Rounded.Remove, null, tint = accentColor, modifier = Modifier.size(20.dp))
+            }
+            Spacer(modifier = Modifier.width(KassakuSpacing.elementGap + 2.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(transaction.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = labelColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(com.example.kassaku.utils.formatDisplayDate(transaction.date), style = MaterialTheme.typography.bodySmall, color = secondaryLabel)
+            }
+            Text(
+                "${if (isIncome) "+" else "-"}${formatCurrencyFlexible(abs(transaction.amount), currencyCode, currencyFormat)}",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Black,
+                color = if (isIncome) BudgetSafeGreen else labelColor,
+                textAlign = TextAlign.End,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SetTargetDialog(currentTarget: Double, onDismissRequest: () -> Unit, onConfirm: (Double) -> Unit) {
+    var targetAmount by remember { mutableStateOf(if (currentTarget > 0) currentTarget.toLong().toString() else "") }
+    AlertDialog(onDismissRequest = onDismissRequest, shape = RoundedCornerShape(28.dp), title = { Text("Atur Batas Belanja", fontWeight = FontWeight.ExtraBold) }, text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { Text("Atur batas maksimal belanja per bulan.", style = MaterialTheme.typography.bodyMedium, color = StitchTextSecondary); OutlinedTextField(value = targetAmount, onValueChange = { targetAmount = it.filter { c -> c.isDigit() } }, label = { Text("Batas Belanja") }, prefix = { Text("Rp ") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), visualTransformation = ThousandSeparatorVisualTransformation()) } }, confirmButton = { Button(onClick = { onConfirm(targetAmount.toDoubleOrNull() ?: 0.0) }, colors = ButtonDefaults.buttonColors(containerColor = StitchPrimary)) { Text("Simpan", color = StitchTextPrimary) } }, dismissButton = { TextButton(onClick = onDismissRequest) { Text("Batal") } }, containerColor = if(isSystemInDarkTheme()) StitchSurfaceDark else StitchSurfaceLight)
 }
 
 @Composable
 fun AnimatedCurrency(
     amount: Double,
+    currencyCode: String = "IDR",
+    currencyFormat: String = "compact",
     style: androidx.compose.ui.text.TextStyle,
     color: Color,
     modifier: Modifier = Modifier
 ) {
+    val targetFloat = amount.toFloat()
     val animatedAmount by animateFloatAsState(
-        targetValue = amount.toFloat(),
-        animationSpec = tween(durationMillis = 1500, easing = FastOutSlowInEasing),
+        targetValue = targetFloat, 
+        animationSpec = tween(1500, easing = FastOutSlowInEasing), 
         label = "amount"
     )
+    
+    val displayAmount = if (animatedAmount == targetFloat) amount else animatedAmount.toDouble()
+    
     Text(
-        text = formatCurrencyFlexible(animatedAmount),
+        text = formatCurrencyFlexible(displayAmount, currencyCode, currencyFormat),
         style = style,
         color = color,
-        modifier = modifier
+        modifier = modifier,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis
     )
 }

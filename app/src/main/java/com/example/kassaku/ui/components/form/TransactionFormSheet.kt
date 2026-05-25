@@ -37,7 +37,6 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,7 +52,7 @@ import androidx.compose.ui.unit.sp
 import com.example.kassaku.ui.theme.StitchPrimary
 import com.example.kassaku.ui.theme.StitchAccentRed
 import com.example.kassaku.ui.theme.StitchTextSecondary
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -119,7 +118,6 @@ fun TransactionFormSheet(
     
     // Haptic feedback
     val haptic = LocalHapticFeedback.current
-    val scope = rememberCoroutineScope()
     
     // Form changed check
     val hasChanges by remember {
@@ -131,13 +129,6 @@ fun TransactionFormSheet(
     // Focus for amount field
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
-    
-    // Auto-focus amount field when sheet opens
-    LaunchedEffect(isVisible) {
-        if (isVisible) {
-            focusRequester.requestFocus()
-        }
-    }
     
     // Handle success state
     LaunchedEffect(formState) {
@@ -215,6 +206,14 @@ fun TransactionFormSheet(
                 errorMessage = amountError,
                 enabled = !isSubmitting
             )
+
+            // Wait for sheet + input to attach before requesting focus (avoids force close)
+            LaunchedEffect(isVisible) {
+                if (isVisible) {
+                    delay(100)
+                    runCatching { focusRequester.requestFocus() }
+                }
+            }
             
             Spacer(modifier = Modifier.height(12.dp))
 

@@ -25,7 +25,7 @@ class RegisterViewModel(
     var registerUiState: RegisterUiState by mutableStateOf(RegisterUiState.Idle)
         private set
 
-    fun register(username: String, password: String) {
+    fun register(username: String, password: String, email: String? = null) {
         if (username.isBlank() || password.isBlank()) {
             registerUiState = RegisterUiState.Error("Semua field harus diisi")
             return
@@ -46,7 +46,7 @@ class RegisterViewModel(
 
         viewModelScope.launch {
             try {
-                val result = authRepository.register(username, password)
+                val result = authRepository.register(username, password, email)
 
                 result.fold(
                     onSuccess = { user ->

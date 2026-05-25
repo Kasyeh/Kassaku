@@ -7,19 +7,19 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.rounded.Analytics
-import androidx.compose.material.icons.rounded.History
-import androidx.compose.material.icons.rounded.Logout
-import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,30 +27,47 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kassaku.ui.components.LogoutConfirmationDialog
 import com.example.kassaku.ui.components.formatCurrencyFlexible
+import com.example.kassaku.ui.theme.KassakuSpacing
 import com.example.kassaku.ui.theme.*
 import com.example.kassaku.viewmodel.HomeViewModel
-import com.example.kassaku.ui.components.skeleton.SkeletonChartView
-import com.example.kassaku.ui.components.skeleton.SkeletonStatSummary
+import com.example.kassaku.viewmodel.EmailUpdateResult
+import com.example.kassaku.data.remote.model.StatistikData
+import com.example.kassaku.data.remote.model.BalanceData
 import com.example.kassaku.utils.ThemeMode
+import com.example.kassaku.utils.SecurityPreferences
+import com.example.kassaku.utils.SecurityUtils
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import coil.compose.AsyncImage
+import com.example.kassaku.viewmodel.AvatarUpdateResult
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     userId: Int,
     homeViewModel: HomeViewModel,
     onLogout: () -> Unit,
+    onNavigateToReminderSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val isDark = LocalIsDark.current
     val backgroundColor = if (isDark) StitchBackgroundDark else StitchBackgroundLight
     val textPrimary = if (isDark) Color.White else StitchTextPrimary
@@ -60,12 +77,21 @@ fun ProfileScreen(
     val balanceData by homeViewModel.balanceData.collectAsStateWithLifecycle()
     val statistikData by homeViewModel.statistikData.collectAsStateWithLifecycle()
     val resetSaldoResult by homeViewModel.resetSaldoResult.collectAsStateWithLifecycle()
+    val avatarUpdateResult by homeViewModel.avatarUpdateResult.collectAsStateWithLifecycle()
+    val passwordUpdateResult by homeViewModel.passwordUpdateResult.collectAsStateWithLifecycle()
+    val emailUpdateResult by homeViewModel.emailUpdateResult.collectAsStateWithLifecycle()
+    val currencyUpdateResult by homeViewModel.currencyUpdateResult.collectAsStateWithLifecycle()
 
+    var showCurrencySheet by remember { mutableStateOf(false) }
     var showResetDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
+    var showPasswordDialog by remember { mutableStateOf(false) }
+    var showEmailEditDialog by remember { mutableStateOf(false) }
+    
     val snackbarHostState = remember { SnackbarHostState() }
     
     val username = balanceData?.username ?: "User"
+    val avatarUrl = balanceData?.avatar
     val initial = if (username.isNotEmpty()) username.take(1).uppercase() else "?"
 
     LaunchedEffect(key1 = userId) {
@@ -75,7 +101,13 @@ fun ProfileScreen(
         }
     }
 
-    val primaryColor = StitchPrimary
+    LaunchedEffect(currencyUpdateResult) {
+        if (currencyUpdateResult is EmailUpdateResult.Success) {
+            kotlinx.coroutines.delay(2000)
+            homeViewModel.resetCurrencyUpdateResult()
+            showCurrencySheet = false
+        }
+    }
 
     LaunchedEffect(resetSaldoResult) {
         when (val result = resetSaldoResult) {
@@ -91,14 +123,71 @@ fun ProfileScreen(
         }
     }
 
+    LaunchedEffect(avatarUpdateResult) {
+        when (val result = avatarUpdateResult) {
+            is AvatarUpdateResult.Success -> {
+                Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
+                homeViewModel.resetAvatarUpdateResult()
+            }
+            is AvatarUpdateResult.Error -> {
+                Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
+                homeViewModel.resetAvatarUpdateResult()
+            }
+            else -> {}
+        }
+    }
+
+    LaunchedEffect(passwordUpdateResult) {
+        when (val result = passwordUpdateResult) {
+            is EmailUpdateResult.Success -> {
+                Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
+                homeViewModel.resetPasswordUpdateResult()
+                showPasswordDialog = false
+            }
+            is EmailUpdateResult.Error -> {
+                Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
+                homeViewModel.resetPasswordUpdateResult()
+            }
+            else -> {}
+        }
+    }
+
+    LaunchedEffect(emailUpdateResult) {
+        when (val result = emailUpdateResult) {
+            is EmailUpdateResult.Success -> {
+                Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
+                homeViewModel.resetEmailUpdateResult()
+                showEmailEditDialog = false
+            }
+            is EmailUpdateResult.Error -> {
+                Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
+                homeViewModel.resetEmailUpdateResult()
+            }
+            else -> {}
+        }
+    }
+
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            val part = SecurityUtils.createMultipartFromUri(context, it, "avatar")
+            if (part != null) {
+                homeViewModel.uploadAvatar(userId, part)
+            }
+        }
+    }
+
+    val securityPrefs = remember { SecurityPreferences(context) }
+    var appLockEnabled by remember { mutableStateOf(securityPrefs.isAppLockEnabled()) }
+
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .background(backgroundColor)
     ) {
-
         Column(modifier = Modifier.fillMaxSize()) {
-            // Header Content
+            // Header
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -119,401 +208,673 @@ fun ProfileScreen(
                 }
             }
             
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Content
             LazyColumn(
                 modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(24.dp),
-                verticalArrangement = Arrangement.spacedBy(24.dp)
+                contentPadding = PaddingValues(
+                    bottom = 120.dp,
+                    start = KassakuSpacing.screenHorizontal,
+                    end = KassakuSpacing.screenHorizontal,
+                    top = KassakuSpacing.screenVertical
+                ),
+                verticalArrangement = Arrangement.spacedBy(KassakuSpacing.sectionGap)
             ) {
-                // User Card Section
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .shadow(10.dp, RoundedCornerShape(32.dp), spotColor = Color(0x1A000000)),
-                    shape = RoundedCornerShape(32.dp),
-                    colors = CardDefaults.cardColors(containerColor = surfaceColor)
-                ) {
+                // Identity Header Section
+                item {
                     Column(
-                        modifier = Modifier.padding(32.dp),
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Avatar
                         Box(
                             modifier = Modifier
-                                .size(90.dp)
-                                .clip(RoundedCornerShape(28.dp))
-                                .background(Brush.linearGradient(listOf(StitchPrimary, Color(0xFF60A5FA))))
-                                .padding(3.dp)
+                                .size(120.dp)
+                                .clickable { imagePickerLauncher.launch("image/*") },
+                            contentAlignment = Alignment.Center
                         ) {
+                            // Gradient Ring
                             Box(
                                 modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(RoundedCornerShape(25.dp))
-                                    .background(surfaceColor),
-                                contentAlignment = Alignment.Center
+                                    .size(110.dp)
+                                    .clip(CircleShape)
+                                    .background(Brush.linearGradient(listOf(StitchPrimary, Color(0xFF8B5CF6))))
+                                    .padding(4.dp)
                             ) {
-                                Text(
-                                    text = initial,
-                                    style = TextStyle(
-                                        fontSize = 36.sp,
-                                        fontWeight = FontWeight.Black,
-                                        brush = Brush.linearGradient(listOf(StitchPrimary, Color(0xFF60A5FA)))
-                                    )
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(CircleShape)
+                                        .background(surfaceColor),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (avatarUrl != null) {
+                                        AsyncImage(
+                                            model = avatarUrl,
+                                            contentDescription = "Profile Avatar",
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    } else {
+                                        Text(
+                                            text = initial,
+                                            style = TextStyle(
+                                                fontSize = 40.sp,
+                                                fontWeight = FontWeight.Black,
+                                                brush = Brush.linearGradient(listOf(StitchPrimary, Color(0xFF8B5CF6)))
+                                            )
+                                        )
+                                    }
+                                }
+                            }
+                            
+                            // Edit Badge
+                            Surface(
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .offset(x = (-4).dp, y = (-4).dp)
+                                    .size(36.dp),
+                                shape = CircleShape,
+                                color = StitchTextPrimary,
+                                shadowElevation = 6.dp
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.CameraAlt,
+                                    contentDescription = "Ganti Avatar",
+                                    tint = Color.White,
+                                    modifier = Modifier.padding(8.dp)
                                 )
                             }
                         }
                         
                         Spacer(modifier = Modifier.height(16.dp))
-                        
                         Text(
                             text = username,
-                            fontSize = 24.sp,
+                            fontSize = 26.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = textPrimary
                         )
-                        
-                        Text(
-                            text = "Akun Pribadi",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = textSecondary,
-                            letterSpacing = 1.sp
-                        )
-
-                        Spacer(modifier = Modifier.height(32.dp))
-                        Divider(color = if(isDark) Color(0xFF334155).copy(alpha = 0.5f) else Color(0xFFF1F5F9))
-                        Spacer(modifier = Modifier.height(24.dp))
-
-                        // Balance horizontal info
+                        Spacer(modifier = Modifier.height(4.dp))
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable { showEmailEditDialog = true }.padding(4.dp)
                         ) {
-                            Column(horizontalAlignment = Alignment.Start) {
-                                Text("UANG SAYA", fontSize = 10.sp, fontWeight = FontWeight.Black, color = textSecondary, letterSpacing = 1.sp)
-                                Text(
-                                    text = formatCurrencyFlexible(balanceData?.saldo?.toDoubleOrNull() ?: 0.0),
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Black,
-                                    color = StitchPrimary
-                                )
-                            }
-                        }
-                        
-                        Spacer(modifier = Modifier.height(20.dp))
-                        
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            ProfileStatBox(
-                                label = "UANG MASUK",
-                                value = balanceData?.pemasukan?.toDoubleOrNull() ?: 0.0,
-                                color = Color(0xFF10B981),
-                                modifier = Modifier.weight(1f),
-                                isDark = isDark
+                            Text(
+                                text = balanceData?.email ?: "Tambah Email Pemulihan",
+                                fontSize = 14.sp,
+                                color = if (balanceData?.email.isNullOrEmpty()) StitchPrimary else textSecondary,
+                                fontWeight = if (balanceData?.email.isNullOrEmpty()) FontWeight.Bold else FontWeight.Medium
                             )
-                            ProfileStatBox(
-                                label = "UANG KELUAR",
-                                value = balanceData?.pengeluaran?.toDoubleOrNull() ?: 0.0,
-                                color = StitchAccentRed,
-                                modifier = Modifier.weight(1f),
-                                isDark = isDark
+                            Spacer(Modifier.width(4.dp))
+                            Icon(
+                                Icons.Rounded.Edit, 
+                                contentDescription = null, 
+                                modifier = Modifier.size(14.dp), 
+                                tint = if (balanceData?.email.isNullOrEmpty()) StitchPrimary else textSecondary
                             )
-                        }
-
-                        Spacer(modifier = Modifier.height(32.dp))
-
-                        Button(
-                            onClick = { showResetDialog = true },
-                            modifier = Modifier.fillMaxWidth().height(56.dp),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if(isDark) Color(0xFFF59E0B).copy(alpha = 0.1f) else Color(0xFFFFF7ED),
-                                contentColor = Color(0xFFD97706)
-                            )
-                        ) {
-                            Icon(Icons.Rounded.Refresh, null, modifier = Modifier.size(20.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("Hapus Semua Catatan", fontWeight = FontWeight.Bold)
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Button(
-                            onClick = { showLogoutDialog = true },
-                            modifier = Modifier.fillMaxWidth().height(56.dp),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if(isDark) Color(0xFFEF4444).copy(alpha = 0.1f) else Color(0xFFFEF2F2),
-                                contentColor = Color(0xFFEF4444)
-                            )
-                        ) {
-                            Icon(Icons.Rounded.Logout, null, modifier = Modifier.size(20.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("Keluar dari Akun", fontWeight = FontWeight.Bold)
                         }
                     }
                 }
-            }
 
-            // Appearance / Theme Section
-            item {
-                Text(
-                    text = "Tampilan",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = textPrimary
-                )
-            }
+                // Settings Group: Akun & Keamanan
+                item {
+                    SettingGroupTitle(title = "Akun & Keamanan", textPrimary = textPrimary)
+                    
+                    SettingGroupCard(isDark = isDark, surfaceColor = surfaceColor) {
+                        SettingItemRow(
+                            icon = Icons.Rounded.Email,
+                            iconColor = StitchPrimary,
+                            title = "Email Pemulihan",
+                            subtitle = balanceData?.email ?: "Belum diatur",
+                            onClick = { showEmailEditDialog = true },
+                            isDark = isDark
+                        )
+                        HorizontalDivider(color = if (isDark) Color(0xFF334155) else Color(0xFFF1F5F9))
+                        SettingItemRow(
+                            icon = Icons.Rounded.LockReset,
+                            iconColor = Color(0xFFF59E0B),
+                            title = "Ganti Password",
+                            subtitle = "Perbarui kata sandi akun Anda",
+                            onClick = { showPasswordDialog = true },
+                            isDark = isDark
+                        )
+                        HorizontalDivider(color = if (isDark) Color(0xFF334155) else Color(0xFFF1F5F9))
+                        SettingItemRowWithSwitch(
+                            icon = Icons.Rounded.Fingerprint,
+                            iconColor = Color(0xFF8B5CF6),
+                            title = "Kunci Aplikasi",
+                            subtitle = "Gunakan Biometrik / PIN perangkat",
+                            isChecked = appLockEnabled,
+                            onCheckedChange = { isChecked ->
+                                if (isChecked) {
+                                    val activity = SecurityUtils.getActivity(context)
+                                    if (activity != null) {
+                                        if (SecurityUtils.isBiometricAvailable(context)) {
+                                            SecurityUtils.showBiometricPrompt(
+                                                activity = activity,
+                                                onSuccess = {
+                                                    appLockEnabled = true
+                                                    securityPrefs.setAppLockEnabled(true)
+                                                },
+                                                onError = { 
+                                                    Toast.makeText(context, "Gagal mengaktifkan: $it", Toast.LENGTH_SHORT).show()
+                                                }
+                                            )
+                                        } else {
+                                            Toast.makeText(context, "PIN atau Kunci Layar belum diatur di perangkat Anda.", Toast.LENGTH_LONG).show()
+                                        }
+                                    }
+                                } else {
+                                    appLockEnabled = false
+                                    securityPrefs.setAppLockEnabled(false)
+                                }
+                            },
+                            isDark = isDark
+                        )
+                    }
+                }
 
-            item {
-                val themeMode by homeViewModel.themeMode.collectAsStateWithLifecycle()
-                
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = surfaceColor),
-                    border = if(!isDark) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF1F5F9)) else null
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        ThemeOptionRow(
-                            label = "Gunakan Pengaturan Sistem",
+                // Settings Group: Preferensi
+                item {
+                    SettingGroupTitle(title = "Preferensi & Tampilan", textPrimary = textPrimary)
+                    
+                    val themeMode by homeViewModel.themeMode.collectAsStateWithLifecycle()
+                    val dynamicColor by homeViewModel.isDynamicColor.collectAsStateWithLifecycle()
+                    
+                    SettingGroupCard(isDark = isDark, surfaceColor = surfaceColor) {
+                        SettingItemRow(
+                            icon = Icons.Rounded.Payments,
+                            iconColor = Color(0xFF10B981),
+                            title = "Format Mata Uang",
+                            subtitle = "${balanceData?.currency ?: "IDR"} • ${if ((balanceData?.currencyFormat ?: "standard") == "compact") "Ringkas" else "Standar"}",
+                            onClick = { showCurrencySheet = true },
+                            isDark = isDark
+                        )
+                        HorizontalDivider(color = if (isDark) Color(0xFF334155) else Color(0xFFF1F5F9))
+                        SettingItemRow(
+                            icon = Icons.Rounded.NotificationsActive,
+                            iconColor = StitchPrimary,
+                            title = "Pengingat Finansial",
+                            subtitle = "Atur notifikasi harian & budget",
+                            onClick = onNavigateToReminderSettings,
+                            isDark = isDark
+                        )
+                        HorizontalDivider(color = if (isDark) Color(0xFF334155) else Color(0xFFF1F5F9))
+                        SettingItemRowRadio(
+                            icon = Icons.Rounded.SettingsBrightness,
+                            iconColor = textSecondary,
+                            title = "Sistem Default",
                             isSelected = themeMode == ThemeMode.SYSTEM,
                             onClick = { homeViewModel.setThemeMode(ThemeMode.SYSTEM) },
                             isDark = isDark
                         )
-                        Divider(modifier = Modifier.padding(vertical = 8.dp), color = if(isDark) Color(0xFF334155).copy(alpha = 0.5f) else Color(0xFFF1F5F9))
-                        ThemeOptionRow(
-                            label = "Mode Terang",
+                        HorizontalDivider(color = if (isDark) Color(0xFF334155) else Color(0xFFF1F5F9))
+                        SettingItemRowRadio(
+                            icon = Icons.Rounded.LightMode,
+                            iconColor = Color(0xFFF59E0B),
+                            title = "Mode Terang",
                             isSelected = themeMode == ThemeMode.LIGHT,
                             onClick = { homeViewModel.setThemeMode(ThemeMode.LIGHT) },
                             isDark = isDark
                         )
-                        Divider(modifier = Modifier.padding(vertical = 8.dp), color = if(isDark) Color(0xFF334155).copy(alpha = 0.5f) else Color(0xFFF1F5F9))
-                        ThemeOptionRow(
-                            label = "Mode Gelap",
+                        HorizontalDivider(color = if (isDark) Color(0xFF334155) else Color(0xFFF1F5F9))
+                        SettingItemRowRadio(
+                            icon = Icons.Rounded.DarkMode,
+                            iconColor = Color(0xFF8B5CF6),
+                            title = "Mode Gelap",
                             isSelected = themeMode == ThemeMode.DARK,
                             onClick = { homeViewModel.setThemeMode(ThemeMode.DARK) },
                             isDark = isDark
                         )
+                        HorizontalDivider(color = if (isDark) Color(0xFF334155) else Color(0xFFF1F5F9))
+                        SettingItemRowWithSwitch(
+                            icon = Icons.Rounded.Palette,
+                            iconColor = Color(0xFFEC4899),
+                            title = "Warna Dinamis",
+                            subtitle = "Tema menyesuaikan wallpaper hp",
+                            isChecked = dynamicColor,
+                            onCheckedChange = { homeViewModel.setDynamicColor(it) },
+                            isDark = isDark
+                        )
                     }
                 }
-            }
 
-            // Analytics Section
-            item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.Analytics, null, tint = StitchPrimary, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = "6 Bulan Terakhir",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = textPrimary
-                    )
-                }
-            }
-
-            item {
-                statistikData?.let { data ->
-                    SmoothLineChart(
-                        labels = data.labels,
-                        pemasukan = data.pemasukan,
-                        pengeluaran = data.pengeluaran,
-                        isDark = isDark
-                    )
-                } ?: SkeletonChartView(
-                    isDarkTheme = isDark,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
-            // Monthly Table Section
-            item {
-                Text(
-                    text = "Ringkasan Bulanan",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = textPrimary
-                )
-            }
-
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = surfaceColor),
-                    border = if(!isDark) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF1F5F9)) else null
-                ) {
-                    Column {
-                        // Table Header
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(if (isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFF8FAFC))
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("BULAN", modifier = Modifier.weight(1f), fontSize = 10.sp, fontWeight = FontWeight.Black, color = textSecondary)
-                            Text("MASUK", modifier = Modifier.weight(1f), fontSize = 10.sp, fontWeight = FontWeight.Black, color = textSecondary, textAlign = TextAlign.End)
-                            Text("KELUAR", modifier = Modifier.weight(1f), fontSize = 10.sp, fontWeight = FontWeight.Black, color = textSecondary, textAlign = TextAlign.End)
-                        }
-
-                        statistikData?.let { data ->
-                            data.labels.forEachIndexed { index, label ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(label, modifier = Modifier.weight(1f), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = textPrimary)
-                                    Text(
-                                        formatCurrencyFlexible(data.pemasukan.getOrElse(index) { 0.0 }),
-                                        modifier = Modifier.weight(1f),
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF10B981),
-                                        textAlign = TextAlign.End
-                                    )
-                                    Text(
-                                        formatCurrencyFlexible(data.pengeluaran.getOrElse(index) { 0.0 }),
-                                        modifier = Modifier.weight(1f),
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = StitchAccentRed,
-                                        textAlign = TextAlign.End
-                                    )
-                                }
-                                if (index < data.labels.size - 1) {
-                                    Divider(modifier = Modifier.padding(horizontal = 16.dp), color = if(isDark) Color(0xFF334155).copy(alpha = 0.5f) else Color(0xFFF1F5F9))
-                                }
-                            }
-                        } ?: SkeletonStatSummary(
-                            rowCount = 6,
-                            isDarkTheme = isDark,
-                            modifier = Modifier.padding(16.dp)
+                // Destructive Actions
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    SettingGroupCard(isDark = isDark, surfaceColor = surfaceColor) {
+                        SettingItemRowDestructive(
+                            icon = Icons.Rounded.DeleteSweep,
+                            title = "Hapus Semua Catatan",
+                            onClick = { showResetDialog = true },
+                            isDark = isDark,
+                            isWarning = true // Orange/Warning color
+                        )
+                        HorizontalDivider(color = if (isDark) Color(0xFF334155) else Color(0xFFF1F5F9))
+                        SettingItemRowDestructive(
+                            icon = Icons.Rounded.Logout,
+                            title = "Keluar dari Akun",
+                            onClick = { showLogoutDialog = true },
+                            isDark = isDark,
+                            isWarning = false // Red color
                         )
                     }
                 }
             }
         }
-    }
-}
 
-    if (showResetDialog) {
-        var password by remember { mutableStateOf("") }
-        var passwordVisible by remember { mutableStateOf(false) }
+        // --- Dialogs and Sheets --- //
 
-        AlertDialog(
-            onDismissRequest = { showResetDialog = false },
-            title = { Text("Masukkan Kata Sandi", fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text("Kata sandi diperlukan untuk menghapus semua catatan dan mengatur ulang uangmu menjadi Rp 0.")
-                    OutlinedTextField(
-                        value = password,
-                        onValueChange = { password = it },
-                        label = { Text("Kata Sandi") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        visualTransformation = if (passwordVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                        trailingIcon = {
-                            val image = if (passwordVisible) androidx.compose.material.icons.Icons.Filled.Visibility else androidx.compose.material.icons.Icons.Filled.VisibilityOff
-                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                Icon(imageVector = image, contentDescription = null)
+        if (showEmailEditDialog) {
+            var inputEmail by remember { mutableStateOf(balanceData?.email ?: "") }
+            var confirmPassword by remember { mutableStateOf("") }
+            val isEmailValid = inputEmail.isEmpty() || android.util.Patterns.EMAIL_ADDRESS.matcher(inputEmail).matches()
+
+            AlertDialog(
+                onDismissRequest = { showEmailEditDialog = false },
+                title = { Text("Atur Email Pemulihan") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(KassakuSpacing.cardGap)) {
+                        OutlinedTextField(
+                            value = inputEmail,
+                            onValueChange = { inputEmail = it },
+                            label = { Text("Email Baru") },
+                            isError = !isEmailValid,
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Email),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        if (!isEmailValid) {
+                            Text("Format email tidak valid", color = StitchAccentRed, fontSize = 12.sp)
+                        }
+                        OutlinedTextField(
+                            value = confirmPassword,
+                            onValueChange = { confirmPassword = it },
+                            label = { Text("Password Akun Saat Ini") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Password),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            if (isEmailValid && confirmPassword.isNotBlank()) {
+                                homeViewModel.updateEmail(userId, inputEmail, confirmPassword)
                             }
                         },
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Password)
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        if (password.isNotEmpty()) {
-                            showResetDialog = false
-                            homeViewModel.resetSaldo(userId, password)
+                        enabled = isEmailValid && confirmPassword.isNotBlank() && emailUpdateResult !is EmailUpdateResult.Loading
+                    ) { 
+                        if (emailUpdateResult is EmailUpdateResult.Loading) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp))
+                        } else {
+                            Text("Simpan") 
                         }
-                    },
-                    enabled = password.isNotEmpty(),
-                    colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFEF4444))
-                ) {
-                    Text("Ya, Hapus", fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showEmailEditDialog = false }) { Text("Batal") }
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { showResetDialog = false }) {
-                    Text("Batal")
-                }
-            },
-            containerColor = surfaceColor,
-            titleContentColor = textPrimary,
-            textContentColor = textSecondary,
-            shape = RoundedCornerShape(24.dp)
-        )
-    }
+            )
+        }
 
-    if (showLogoutDialog) {
-        LogoutConfirmationDialog(
-            onDismissRequest = { showLogoutDialog = false },
-            onConfirm = {
-                showLogoutDialog = false
-                homeViewModel.logout()
-            },
-            isDark = isDark
-        )
+        if (showPasswordDialog) {
+            var currentPassword by remember { mutableStateOf("") }
+            var newPassword by remember { mutableStateOf("") }
+            var confirmPassword by remember { mutableStateOf("") }
+            
+            AlertDialog(
+                onDismissRequest = { showPasswordDialog = false },
+                title = { Text("Ganti Password") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(KassakuSpacing.elementGap + 4.dp)) {
+                        OutlinedTextField(
+                            value = currentPassword,
+                            onValueChange = { currentPassword = it },
+                            label = { Text("Password Lama") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = newPassword,
+                            onValueChange = { newPassword = it },
+                            label = { Text("Password Baru") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = confirmPassword,
+                            onValueChange = { confirmPassword = it },
+                            label = { Text("Konfirmasi Password Baru") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            homeViewModel.updatePassword(currentPassword, newPassword, confirmPassword)
+                        },
+                        enabled = currentPassword.isNotBlank() && newPassword.isNotBlank() && newPassword == confirmPassword
+                    ) {
+                        Text("Simpan")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showPasswordDialog = false }) { Text("Batal") }
+                }
+            )
+        }
+
+        if (showResetDialog) {
+            var resetPassword by remember { mutableStateOf("") }
+            var resetPasswordVisible by remember { mutableStateOf(false) }
+
+            AlertDialog(
+                onDismissRequest = { showResetDialog = false },
+                title = { Text("Hapus Semua Catatan?") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(KassakuSpacing.cardGap)) {
+                        Text("Apakah Anda yakin ingin mereset saldo, menghapus semua catatan transaksi, dan impian? Tindakan ini tidak dapat dibatalkan.")
+                        OutlinedTextField(
+                            value = resetPassword,
+                            onValueChange = { resetPassword = it },
+                            label = { Text("Kata Sandi") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            visualTransformation = if (resetPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon = {
+                                val image = if (resetPasswordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff
+                                IconButton(onClick = { resetPasswordVisible = !resetPasswordVisible }) {
+                                    Icon(imageVector = image, contentDescription = null)
+                                }
+                            },
+                            keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Password)
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            if(resetPassword.isNotEmpty()) {
+                                homeViewModel.resetSaldo(userId, resetPassword)
+                                showResetDialog = false
+                            }
+                        },
+                        enabled = resetPassword.isNotEmpty()
+                    ) {
+                        Text("Ya, Hapus Semua", color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showResetDialog = false }) {
+                        Text("Batal")
+                    }
+                }
+            )
+        }
+
+        if (showLogoutDialog) {
+            LogoutConfirmationDialog(
+                onConfirm = {
+                    showLogoutDialog = false
+                    onLogout()
+                },
+                onDismissRequest = { showLogoutDialog = false },
+                isDark = isDark
+            )
+        }
+
+        if (showCurrencySheet) {
+            var selectedCurrency by remember { mutableStateOf(balanceData?.currency ?: "IDR") }
+            var selectedFormat by remember { mutableStateOf(balanceData?.currencyFormat ?: "standard") }
+            
+            AlertDialog(
+                onDismissRequest = { showCurrencySheet = false },
+                title = { Text("Format Mata Uang") },
+                text = {
+                    Column {
+                        Text("Pilih Mata Uang", fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                            FilterChip(selected = selectedCurrency == "IDR", onClick = { selectedCurrency = "IDR" }, label = { Text("IDR") })
+                            FilterChip(selected = selectedCurrency == "USD", onClick = { selectedCurrency = "USD" }, label = { Text("USD") })
+                            FilterChip(selected = selectedCurrency == "MYR", onClick = { selectedCurrency = "MYR" }, label = { Text("MYR") })
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Format Tampilan", fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                            FilterChip(selected = selectedFormat == "standard", onClick = { selectedFormat = "standard" }, label = { Text("Standar") })
+                            FilterChip(selected = selectedFormat == "compact", onClick = { selectedFormat = "compact" }, label = { Text("Ringkas") })
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        homeViewModel.updateCurrency(userId, selectedCurrency, selectedFormat)
+                        showCurrencySheet = false
+                    }) {
+                        Text("Simpan")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showCurrencySheet = false }) { Text("Batal") }
+                }
+            )
+        }
     }
 }
 
+// --- Helper Composables --- //
 
 @Composable
-fun ProfileStatBox(label: String, value: Double, color: Color, isDark: Boolean, modifier: Modifier = Modifier) {
-    Column(modifier = modifier) {
-        Text(label, fontSize = 10.sp, fontWeight = FontWeight.Black, color = if(isDark) Color(0xFF94A3B8) else StitchTextSecondary, letterSpacing = 1.sp)
-        Text(
-            text = formatCurrencyFlexible(value),
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
-            color = color
-        )
+fun SettingGroupTitle(title: String, textPrimary: Color) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        color = textPrimary,
+        modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
+    )
+}
+
+@Composable
+fun SettingGroupCard(
+    isDark: Boolean,
+    surfaceColor: Color,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = surfaceColor),
+        border = if(!isDark) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF1F5F9)) else null,
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isDark) 0.dp else 2.dp)
+    ) {
+        Column(content = content)
     }
 }
 
-
 @Composable
-fun ThemeOptionRow(
-    label: String,
-    isSelected: Boolean,
+fun SettingItemRow(
+    icon: ImageVector,
+    iconColor: Color,
+    title: String,
+    subtitle: String,
     onClick: () -> Unit,
     isDark: Boolean
 ) {
+    val textPrimary = if (isDark) Color.White else StitchTextPrimary
+    val textSecondary = if (isDark) Color(0xFF94A3B8) else StitchTextSecondary
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
-            .padding(vertical = 8.dp, horizontal = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+            .padding(horizontal = KassakuSpacing.cardInnerLarge, vertical = KassakuSpacing.cardInner),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyLarge,
-            color = if (isDark) Color.White else StitchTextPrimary,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-        )
-        RadioButton(
-            selected = isSelected,
-            onClick = onClick,
-            colors = RadioButtonDefaults.colors(
-                selectedColor = StitchPrimary,
-                unselectedColor = if (isDark) Color(0xFF475569) else Color(0xFFCBD5E1)
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(iconColor.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(20.dp))
+        }
+        Spacer(Modifier.width(KassakuSpacing.elementGap + 4.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                color = textPrimary
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = textSecondary
+            )
+        }
+        Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = textSecondary)
+    }
+}
+
+@Composable
+fun SettingItemRowWithSwitch(
+    icon: ImageVector,
+    iconColor: Color,
+    title: String,
+    subtitle: String,
+    isChecked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    isDark: Boolean
+) {
+    val textPrimary = if (isDark) Color.White else StitchTextPrimary
+    val textSecondary = if (isDark) Color(0xFF94A3B8) else StitchTextSecondary
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = KassakuSpacing.cardInnerLarge, vertical = KassakuSpacing.cardInner - 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(iconColor.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(20.dp))
+        }
+        Spacer(Modifier.width(KassakuSpacing.elementGap + 4.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                color = textPrimary
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = textSecondary
+            )
+        }
+        Switch(
+            checked = isChecked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = StitchPrimary,
+                uncheckedThumbColor = Color.White,
+                uncheckedTrackColor = if(isDark) Color(0xFF334155) else Color(0xFFE2E8F0),
+                uncheckedBorderColor = Color.Transparent
             )
         )
     }
 }
+
+@Composable
+fun SettingItemRowRadio(
+    icon: ImageVector,
+    iconColor: Color,
+    title: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    isDark: Boolean
+) {
+    val textPrimary = if (isDark) Color.White else StitchTextPrimary
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = KassakuSpacing.cardInnerLarge, vertical = KassakuSpacing.cardInner - 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(iconColor.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(20.dp))
+        }
+        Spacer(Modifier.width(KassakuSpacing.elementGap + 4.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+            color = textPrimary,
+            modifier = Modifier.weight(1f)
+        )
+        RadioButton(
+            selected = isSelected,
+            onClick = onClick,
+            colors = RadioButtonDefaults.colors(selectedColor = StitchPrimary)
+        )
+    }
+}
+
+@Composable
+fun SettingItemRowDestructive(
+    icon: ImageVector,
+    title: String,
+    onClick: () -> Unit,
+    isDark: Boolean,
+    isWarning: Boolean = false
+) {
+    val color = if (isWarning) Color(0xFFF59E0B) else Color(0xFFEF4444)
+    
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 20.dp, vertical = 18.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(color.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
+        }
+        Spacer(Modifier.width(16.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+            color = color,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+

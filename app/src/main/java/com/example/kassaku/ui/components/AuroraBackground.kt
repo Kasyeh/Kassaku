@@ -7,13 +7,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.translate
+import android.os.Build
 import com.example.kassaku.ui.theme.StitchPrimary
+import com.example.kassaku.utils.isEmulator
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -28,41 +31,54 @@ fun AuroraBackground(
     val secondaryColor = Color(0xFF0EA5E9) // Sky Blue
     val tertiaryColor = Color(0xFF8B5CF6) // Violet
 
-    // Animate Blobs
+    // Animate Blobs (Disabled on Emulator for Performance)
+    val isEmulator = remember { isEmulator() }
     val infiniteTransition = rememberInfiniteTransition(label = "AuroraInfinite")
 
-    // Blob 1 Animation (Primary)
-    val float1 by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 2 * Math.PI.toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(15000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "Blob1"
-    )
+    // Blob 1 Animation
+    val float1 by if (isEmulator) {
+        remember { mutableStateOf(0f) }
+    } else {
+        infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 2 * Math.PI.toFloat(),
+            animationSpec = infiniteRepeatable(
+                animation = tween(15000, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "Blob1"
+        )
+    }
 
-    // Blob 2 Animation (Secondary)
-    val float2 by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 2 * Math.PI.toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(22000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "Blob2"
-    )
+    // Blob 2 Animation
+    val float2 by if (isEmulator) {
+        remember { mutableStateOf(1f) }
+    } else {
+        infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 2 * Math.PI.toFloat(),
+            animationSpec = infiniteRepeatable(
+                animation = tween(22000, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "Blob2"
+        )
+    }
 
-    // Blob 3 Animation (Tertiary)
-    val float3 by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 2 * Math.PI.toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(18000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "Blob3"
-    )
+    // Blob 3 Animation
+    val float3 by if (isEmulator) {
+        remember { mutableStateOf(2f) }
+    } else {
+        infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 2 * Math.PI.toFloat(),
+            animationSpec = infiniteRepeatable(
+                animation = tween(18000, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "Blob3"
+        )
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
         val baseColor = if (isDark) Color(0xFF0F172A) else Color(0xFFF8FAFC)

@@ -23,4 +23,12 @@ class ThemePreferences(context: Context) {
             ThemeMode.SYSTEM
         }
     }
+
+    fun setDynamicColorEnabled(enabled: Boolean) {
+        sharedPreferences.edit().putBoolean("dynamic_color", enabled).apply()
+    }
+
+    fun isDynamicColorEnabled(): Boolean {
+        return sharedPreferences.getBoolean("dynamic_color", false)
+    }
 }

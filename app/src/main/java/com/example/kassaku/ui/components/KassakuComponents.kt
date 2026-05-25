@@ -56,23 +56,70 @@ fun IconButtonSmall(
 }
 
 
-fun formatCurrencyFlexible(amount: Number): String {
+fun formatCurrencyFlexible(
+    amount: Number,
+    currencyCode: String = "IDR",
+    formatMode: String = "compact"
+): String {
+    if (formatMode.equals("standard", ignoreCase = true)) {
+        return formatCurrencyExact(amount.toDouble(), currencyCode)
+    }
+
     val absAmount = abs(amount.toDouble())
+    val symbol = when (currencyCode.uppercase()) {
+        "USD" -> "$"
+        "MYR" -> "RM"
+        "EUR" -> "€"
+        "SGD" -> "S$"
+        else -> "Rp"
+    }
+
     return when {
         absAmount >= 1_000_000_000 -> {
             val formatted = String.format("%.1f", amount.toDouble() / 1_000_000_000).replace(".0", "")
-            "Rp $formatted milliar"
+            "$symbol $formatted miliar"
         }
         absAmount >= 100_000_000 -> {
             val formatted = String.format("%.1f", amount.toDouble() / 1_000_000).replace(".0", "")
-            "Rp $formatted jt"
+            "$symbol $formatted jt"
         }
         else -> {
-            val format = NumberFormat.getCurrencyInstance(Locale("in", "ID"))
-            format.maximumFractionDigits = 0
-            format.format(amount)
+            formatCurrencyExact(amount.toDouble(), currencyCode)
         }
     }
+}
+
+fun formatCurrencyExact(amount: Double, currencyCode: String = "IDR"): String {
+    val locale = when (currencyCode.uppercase()) {
+        "USD" -> Locale("en", "US")
+        "MYR" -> Locale("ms", "MY")
+        "EUR" -> Locale("fr", "FR")
+        "SGD" -> Locale("en", "SG")
+        else -> Locale("in", "ID")
+    }
+
+    val format = NumberFormat.getCurrencyInstance(locale)
+    if (currencyCode.uppercase() == "IDR") {
+        format.maximumFractionDigits = 0
+    } else {
+        format.minimumFractionDigits = 2
+        format.maximumFractionDigits = 2
+    }
+    
+    var result = format.format(amount)
+    
+    // Replace default currency symbols with our preferred ones if needed
+    result = result.replace("Rp", "Rp ")
+                   .replace("US$", "$ ")
+                   .replace("$", "$ ")
+                   .replace("RM", "RM ")
+                   .replace("SGD", "S$ ")
+                   .replace("€", "€ ")
+                   // Clean up double spaces
+                   .replace("  ", " ")
+                   .trim()
+                   
+    return result
 }
 @Composable
 fun LogoutConfirmationDialog(

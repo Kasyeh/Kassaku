@@ -28,7 +28,8 @@ interface ApiService {
     @POST("register")
     suspend fun register(
         @Field("username") username: String,
-        @Field("password") password: String
+        @Field("password") password: String,
+        @Field("email") email: String? = null
     ): Response<RegisterResponse>
 
     @GET("me/saldo")
@@ -102,6 +103,21 @@ interface ApiService {
     @GET("me/statistik")
     suspend fun getMyStatistik(): Response<StatistikResponse>
 
+    @GET("user/statistik/ai-insight")
+    suspend fun getAiInsight(@Query("period") period: String): Response<AiInsightResponse>
+
+    @GET("me/smart-nudges")
+    suspend fun getSmartNudges(): Response<NudgeResponse>
+
+    @FormUrlEncoded
+    @POST("me/chatbot/ask")
+    suspend fun askChatbot(
+        @Field("message") message: String
+    ): Response<ChatbotResponse>
+
+    @POST("me/chatbot/reset")
+    suspend fun resetChatbot(): Response<BasicMessageResponse>
+
     @FormUrlEncoded
     @POST("target-pengeluaran/simpan")
     suspend fun simpanTargetPengeluaran(
@@ -150,6 +166,12 @@ interface ApiService {
     @GET("me/budget-kategori")
     suspend fun getMyBudgetKategori(): Response<BudgetKategoriResponse>
 
+    @GET("me/notifications")
+    suspend fun getMyNotifications(): Response<NotificationInboxResponse>
+
+    @POST("me/notifications/read-all")
+    suspend fun markAllNotificationsAsRead(): Response<BasicMessageResponse>
+
     @FormUrlEncoded
     @POST("user/budget-kategori/simpan")
     suspend fun simpanBudgetKategori(
@@ -166,6 +188,85 @@ interface ApiService {
         @Path("id") budgetId: Int,
         @Field("password") password: String
     ): Response<HapusBudgetResponse>
+
+    @GET("notification/preferences")
+    suspend fun getReminderPreferences(): Response<ReminderPreferenceResponse>
+
+    @FormUrlEncoded
+    @POST("notification/preferences")
+    suspend fun saveReminderPreferences(
+        @Field("reminders_enabled") remindersEnabled: Int,
+        @Field("daily_reminder_enabled") dailyReminderEnabled: Int,
+        @Field("daily_reminder_hour") dailyReminderHour: Int,
+        @Field("budget_alert_enabled") budgetAlertEnabled: Int,
+        @Field("budget_alert_threshold") budgetAlertThreshold: Int,
+        @Field("dream_reminder_enabled") dreamReminderEnabled: Int,
+        @Field("dream_inactive_days") dreamInactiveDays: Int
+    ): Response<ReminderPreferenceResponse>
+
+    @FormUrlEncoded
+    @POST("user/profile/update-email")
+    suspend fun updateEmail(
+        @Field("email") email: String?,
+        @Field("password") password: String
+    ): Response<BasicMessageResponse>
+
+    @FormUrlEncoded
+    @POST("user/profile/update-password")
+    suspend fun updatePassword(
+        @Field("current_password") currentPassword: String,
+        @Field("new_password") newPassword: String,
+        @Field("new_password_confirmation") newPasswordConfirmation: String
+    ): Response<BasicMessageResponse>
+
+    @FormUrlEncoded
+    @POST("user/profile/update-currency")
+    suspend fun updateCurrency(
+        @Field("currency") currency: String,
+        @Field("currency_format") currencyFormat: String? = null
+    ): Response<BasicMessageResponse>
+
+    @FormUrlEncoded
+    @POST("forgot-password/send-otp")
+    suspend fun sendOtp(
+        @Field("username") username: String,
+        @Field("email") email: String
+    ): Response<BasicMessageResponse>
+
+    @FormUrlEncoded
+    @POST("forgot-password/reset")
+    suspend fun resetPassword(
+        @Field("username") username: String,
+        @Field("email") email: String,
+        @Field("otp") otp: String,
+        @Field("password") password: String
+    ): Response<BasicMessageResponse>
+
+    @FormUrlEncoded
+    @POST("auth/google/android")
+    suspend fun loginWithGoogle(
+        @Field("id_token") idToken: String,
+        @Field("fcm_token") fcmToken: String? = null
+    ): Response<LoginResponse>
+
+    // Avatar
+    @Multipart
+    @POST("user/profile/avatar/upload")
+    suspend fun uploadAvatar(
+        @Part avatar: okhttp3.MultipartBody.Part
+    ): Response<AvatarResponse>
+
+    @FormUrlEncoded
+    @POST("user/profile/avatar/predefined")
+    suspend fun setPredefinedAvatar(
+        @Field("avatar_id") avatarId: String
+    ): Response<AvatarResponse>
+
+    @POST("user/profile/avatar/remove")
+    suspend fun removeAvatar(): Response<AvatarResponse>
+
+    @GET("categories")
+    suspend fun getCategories(): Response<CategoryResponse>
 }
 
 // --- API CLIENT OBJECT ---

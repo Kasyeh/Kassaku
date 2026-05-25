@@ -52,6 +52,7 @@ import com.example.kassaku.data.remote.model.ImpianItem
 import com.example.kassaku.ui.theme.StitchAccentRed
 import com.example.kassaku.ui.theme.StitchPrimary
 import com.example.kassaku.ui.theme.StitchTextSecondary
+import kotlinx.coroutines.delay
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -85,8 +86,8 @@ fun SetorImpianFormSheet(
     val formatter = NumberFormat.getNumberInstance(Locale("id", "ID")).apply {
         maximumFractionDigits = 0
     }
-    val sisaTarget = item.sisaTarget ?: 0L
-    val danaTerkumpul = item.danaTerkumpul ?: 0L
+    val sisaTarget = (item.sisaTarget ?: 0.0).toLong()
+    val danaTerkumpul = (item.danaTerkumpul ?: 0.0).toLong()
     val progressValue = ((item.persentaseProgress ?: 0.0) / 100.0).toFloat().coerceIn(0f, 1f)
 
     // Form fields
@@ -112,13 +113,6 @@ fun SetorImpianFormSheet(
     // Focus for amount field
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
-
-    // Auto-focus amount field when sheet opens
-    LaunchedEffect(isVisible) {
-        if (isVisible) {
-            focusRequester.requestFocus()
-        }
-    }
 
     // Handle success state
     LaunchedEffect(formState) {
@@ -271,6 +265,13 @@ fun SetorImpianFormSheet(
                 errorMessage = amountError,
                 enabled = !isSubmitting
             )
+
+            LaunchedEffect(isVisible) {
+                if (isVisible) {
+                    delay(100)
+                    runCatching { focusRequester.requestFocus() }
+                }
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
 

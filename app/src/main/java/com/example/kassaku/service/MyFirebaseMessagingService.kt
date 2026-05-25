@@ -12,9 +12,10 @@ import com.example.kassaku.MainActivity
 import com.example.kassaku.R
 import com.example.kassaku.utils.ForceLogoutManager
 import com.example.kassaku.viewmodel.LogoutReason
-import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import android.graphics.BitmapFactory
+import androidx.core.content.ContextCompat.getSystemService
+import com.google.firebase.messaging.FirebaseMessagingService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -52,7 +53,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             Log.d(TAG, "Notification Title: ${it.title}")
             Log.d(TAG, "Notification Body: ${it.body}")
             
-            showNotification(it.title, it.body)
+            showNotification(it.title, it.body, message.data)
         }
         
         // Cek apakah ada data payload
@@ -60,14 +61,14 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             Log.d(TAG, "Data Payload: ${message.data}")
             
             // Handle custom data di sini
-            handleDataPayload(message.data)
+            handleDataPayload(message)
 
             // Jika notification object kosong (data-only message), 
             // atau jika kita ingin memaksa notifikasi muncul di foreground
             if (message.notification == null) {
                 val title = message.data["title"] ?: "Kassaku"
                 val body = message.data["message"] ?: "Ada update baru"
-                showNotification(title, body)
+                showNotification(title, body, message.data)
             }
         }
     }
@@ -75,20 +76,23 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
     /**
      * Tampilkan notifikasi di system tray
      */
-    private fun showNotification(title: String?, body: String?) {
+    private fun showNotification(title: String?, body: String?, extras: Map<String, String> = emptyMap()) {
         Log.d(TAG, "Showing notification: $title - $body")
         createNotificationChannel()
         
         // Intent ketika notifikasi di-tap
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra(EXTRA_OPEN_NOTIFICATIONS_INBOX, true)
+            putExtra(EXTRA_NOTIFICATION_CATEGORY, extras["reminder_category"] ?: extras["action"] ?: "")
+            putExtra(EXTRA_NOTIFICATION_TYPE, extras["type"] ?: "")
         }
         
         val pendingIntent = PendingIntent.getActivity(
             this,
             0,
             intent,
-            PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         
         // Build notifikasi
@@ -137,7 +141,8 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
     /**
      * Handle custom data payload
      */
-    private fun handleDataPayload(data: Map<String, String>) {
+    private fun handleDataPayload(message: RemoteMessage) {
+        val data = message.data
         val type = data["type"]
         
         when (type) {
@@ -162,6 +167,17 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
                     ForceLogoutManager.trigger(LogoutReason.BLOCKED)
                 }
                 // Notifikasi sudah dipicu oleh onMessageReceived di atas jika data-only
+            }
+            "financial_reminder" -> {
+                val category = data["reminder_category"] ?: "Uang Saya"
+                val messageText = data["message"] ?: "Waktunya cek keuangan hari ini"
+                Log.d(TAG, "Financial reminder notification: $category - $messageText")
+                
+                // Jika ini adalah data-only message (notification object null), 
+                // pastikan kita menggunakan konten yang spesifik untuk reminder ini
+                if (message.notification == null) {
+                    showNotification(category, messageText, data)
+                }
             }
         }
     }

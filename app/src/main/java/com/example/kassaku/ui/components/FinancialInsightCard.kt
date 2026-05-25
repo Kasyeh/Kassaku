@@ -1,7 +1,6 @@
 package com.example.kassaku.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -14,11 +13,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.kassaku.data.remote.model.StatistikData
+import com.example.kassaku.ui.theme.KassakuSpacing
 import com.example.kassaku.ui.theme.*
 
 /**
@@ -33,9 +34,10 @@ fun FinancialInsightCard(
     modifier: Modifier = Modifier
 ) {
     val isDark = LocalIsDark.current
-    val backgroundColor = if (isDark) InsightCardDark else InsightCardLight
-    val labelColor = if (isDark) iOSLabelDark else iOSLabelLight
-    val secondaryLabelColor = if (isDark) iOSSecondaryLabelDark else iOSSecondaryLabelLight
+    val backgroundColor = if (isDark) Color(0xFF1F2937) else Color.White
+    val borderColor = if (isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFE2E8F0)
+    val labelColor = if (isDark) Color.White else Color(0xFF1E293B)
+    val secondaryLabelColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
     
     // Calculate insight from statistik data
     val insight = calculateInsight(statistikData, currentMonthExpense, currentMonthIncome)
@@ -45,27 +47,28 @@ fun FinancialInsightCard(
             .fillMaxWidth()
             .shadow(
                 elevation = 4.dp,
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(28.dp),
                 spotColor = PremiumShadowPrimary,
                 ambientColor = PremiumShadowSecondary
             ),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(containerColor = backgroundColor),
+        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
+                .padding(KassakuSpacing.cardInnerLarge),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Trend Icon
             Box(
                 modifier = Modifier
-                    .size(44.dp)
+                    .size(52.dp)
                     .background(
                         insight.iconColor.copy(alpha = 0.15f),
-                        CircleShape
+                        RoundedCornerShape(18.dp)
                     ),
                 contentAlignment = Alignment.Center
             ) {
@@ -73,19 +76,19 @@ fun FinancialInsightCard(
                     imageVector = insight.icon,
                     contentDescription = null,
                     tint = insight.iconColor,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(26.dp)
                 )
             }
             
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(KassakuSpacing.elementGap + 4.dp))
             
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = insight.title,
                     style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Black,
                     color = labelColor,
-                    letterSpacing = (-0.2).sp
+                    letterSpacing = 0.sp
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
@@ -115,7 +118,7 @@ private fun calculateInsight(
     if (statistikData == null || statistikData.pengeluaran.size < 2) {
         return InsightResult(
             title = "Mulai Catat Keuanganmu",
-            description = "Catat uang masuk dan keluarmu untuk melihat tips di sini.",
+            description = "Catat uang masuk dan keluar untuk melihat ringkasan keuangan di sini.",
             icon = Icons.Rounded.TrendingFlat,
             iconColor = TrendNeutral
         )
@@ -141,7 +144,7 @@ private fun calculateInsight(
     return when {
         // Positive: Savings increased significantly
         savingsRate >= 30 -> InsightResult(
-            title = "Tabungan Bagus! 🎉",
+            title = "Tabungan Bagus",
             description = "Kamu menabung ${savingsRate}% dari pemasukan bulan ini. Pertahankan!",
             icon = Icons.Rounded.TrendingUp,
             iconColor = TrendPositive

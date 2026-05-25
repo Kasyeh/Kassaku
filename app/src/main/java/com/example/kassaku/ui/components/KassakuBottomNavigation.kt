@@ -107,9 +107,9 @@ fun KassakuBottomBar(
 ) {
     val items = listOf(
         BottomNavItem.Home,
+        BottomNavItem.Statistik,
         BottomNavItem.Riwayat,
         BottomNavItem.Impian,
-        BottomNavItem.Statistik,
         BottomNavItem.Profil
     )
 

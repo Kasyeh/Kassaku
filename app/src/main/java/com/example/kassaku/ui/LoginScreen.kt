@@ -22,6 +22,10 @@ import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -48,17 +52,26 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.kassaku.R
 import com.example.kassaku.ui.components.AuroraBackground
+import com.example.kassaku.ui.theme.KassakuSpacing
 import com.example.kassaku.ui.theme.*
 import com.example.kassaku.viewmodel.LoginUiState
 import com.example.kassaku.viewmodel.LoginViewModel
 import com.example.kassaku.viewmodel.UnblockUiState
 import kotlinx.coroutines.delay
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.util.Log
+import androidx.compose.foundation.BorderStroke
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
     onLoginSuccess: (userId: Int, rememberMe: Boolean) -> Unit,
     onNavigateToRegister: () -> Unit,
+    onNavigateToForgotPassword: () -> Unit = {},
     onSyncFCM: (Int?) -> Unit,
     loginViewModel: LoginViewModel = viewModel()
 ) {
@@ -67,8 +80,10 @@ fun LoginScreen(
     var passwordVisible by remember { mutableStateOf(false) }
     var rememberMe by remember { mutableStateOf(true) }
     val loginUiState = loginViewModel.loginUiState
+    val forgotPasswordUiState = loginViewModel.forgotPasswordUiState
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showBlockedDialog by remember { mutableStateOf(false) }
+    var showForgotPasswordDialog by remember { mutableStateOf(false) }
     var blockedInfo by remember { mutableStateOf<LoginUiState.Blocked?>(null) }
     var unblockPesan by remember { mutableStateOf("") }
     val unblockUiState = loginViewModel.unblockUiState
@@ -146,6 +161,42 @@ fun LoginScreen(
         }
     }
 
+    // Google Sign In Setup
+    val gso = remember {
+        GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestEmail()
+            .requestIdToken("277429880739-4ihakunhcgftda8b7ltqj40k4a8rdlmk.apps.googleusercontent.com")
+            .build()
+    }
+    val googleSignInClient = remember { GoogleSignIn.getClient(context, gso) }
+    
+    val googleSignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        try {
+            val account = task.getResult(ApiException::class.java)
+            account.idToken?.let { idToken ->
+                loginViewModel.loginWithGoogle(idToken)
+            } ?: run {
+                Toast.makeText(context, "Google login failed: No ID Token", Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: ApiException) {
+            val statusCode = e.statusCode
+            val statusMessage = com.google.android.gms.common.api.CommonStatusCodes.getStatusCodeString(statusCode)
+            Log.e("LoginScreen", "Google sign in failed. Code: $statusCode ($statusMessage)", e)
+            
+            val friendlyMessage = when(statusCode) {
+                10 -> "Developer Error (Cek SHA-1 & Client ID di Firebase)"
+                7 -> "Network Error (Cek koneksi internet)"
+                12500 -> "Sign-in Gagal (Cek konfigurasi Google Play Services)"
+                12501 -> "Login dibatalkan oleh pengguna"
+                else -> e.message ?: "Terjadi kesalahan"
+            }
+            Toast.makeText(context, "Google login failed: $friendlyMessage", Toast.LENGTH_LONG).show()
+        }
+    }
+
     AuroraBackground(isDark = isDark) {
         Box(
             modifier = Modifier
@@ -167,44 +218,16 @@ fun LoginScreen(
                     enter = fadeIn(tween(800)) + expandVertically(expandFrom = Alignment.Top)
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(
-                            modifier = Modifier
-                                .size(90.dp)
-                                .shadow(24.dp, CircleShape, spotColor = primaryColor.copy(alpha = 0.3f))
-                                .clip(CircleShape)
-                                .background(if (isDark) Color(0xFF1E293B).copy(alpha = 0.8f) else Color.White.copy(alpha = 0.9f))
-                                .border(1.dp, glassBorderColor, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Image(
-                                painter = painterResource(id = R.drawable.logo),
-                                contentDescription = "Logo",
-                                modifier = Modifier.size(56.dp),
-                                contentScale = ContentScale.Fit
-                            )
-                        }
-                        
-                        Spacer(modifier = Modifier.height(24.dp))
-                        
-                        Text(
-                            text = "KasSaku",
-                            fontSize = 32.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = textPrimary,
-                            letterSpacing = (-1).sp
-                        )
-                        
-                        Text(
-                            text = "Kelola Uangmu dengan Mudah",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = textSecondary,
-                            modifier = Modifier.alpha(0.8f)
+                        Image(
+                            painter = painterResource(id = R.drawable.logo),
+                            contentDescription = "Logo KasSaku",
+                            modifier = Modifier.size(80.dp),
+                            contentScale = ContentScale.Fit
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(40.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
                 // Glass Card Form
                 AnimatedVisibility(
@@ -214,141 +237,114 @@ fun LoginScreen(
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .border(1.dp, glassBorderColor, RoundedCornerShape(32.dp)),
-                        shape = RoundedCornerShape(32.dp),
+                            .border(1.dp, glassBorderColor, RoundedCornerShape(48.dp)),
+                        shape = RoundedCornerShape(48.dp),
                         color = glassColor,
                         shadowElevation = 0.dp
                     ) {
                         Column(
-                            modifier = Modifier.padding(24.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                            modifier = Modifier.padding(horizontal = 28.dp, vertical = 32.dp),
+                            verticalArrangement = Arrangement.spacedBy(KassakuSpacing.cardGap)
                         ) {
                             Text(
                                 text = "Masuk ke Akun",
-                                style = MaterialTheme.typography.titleMedium,
+                                fontSize = 26.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = textPrimary,
+                                letterSpacing = (-0.5).sp
+                            )
+                            Text(
+                                text = "Kelola Uangmu dengan Mudah",
+                                fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = textPrimary
+                                color = textSecondary
                             )
 
                             // Username
-                            TextField(
-                                value = username,
-                                onValueChange = { username = it },
-                                placeholder = { 
-                                    Text(
-                                        "Username", 
-                                        color = if (errorMessage != null) StitchNegative.copy(alpha = 0.6f) else textSecondary.copy(alpha = 0.6f)
-                                    ) 
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(56.dp)
-                                    .border(
-                                        width = if (errorMessage != null) 2.dp else 0.dp,
-                                        color = if (errorMessage != null) StitchNegative else Color.Transparent,
-                                        shape = RoundedCornerShape(16.dp)
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text(
+                                    text = "USERNAME",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = textSecondary.copy(alpha = 0.7f),
+                                    letterSpacing = 2.sp,
+                                    modifier = Modifier.padding(start = 4.dp)
+                                )
+                                TextField(
+                                    value = username,
+                                    onValueChange = { username = it },
+                                    placeholder = { Text("Masukkan username", color = textSecondary.copy(alpha = 0.4f), fontWeight = FontWeight.Bold, fontSize = 14.sp) },
+                                    modifier = Modifier.fillMaxWidth().height(58.dp),
+                                    shape = RoundedCornerShape(24.dp),
+                                    leadingIcon = { Icon(Icons.Default.Person, null, tint = if (errorMessage != null) StitchNegative else textSecondary.copy(alpha = 0.5f)) },
+                                    colors = TextFieldDefaults.colors(
+                                        focusedContainerColor = if (errorMessage != null) StitchNegative.copy(alpha = 0.08f) else if(isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFF8FAFC),
+                                        unfocusedContainerColor = if (errorMessage != null) StitchNegative.copy(alpha = 0.08f) else if(isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFF8FAFC),
+                                        focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
+                                        cursorColor = if (errorMessage != null) StitchNegative else primaryColor,
+                                        focusedTextColor = textPrimary, unfocusedTextColor = textPrimary
                                     ),
-                                shape = RoundedCornerShape(16.dp),
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.Person,
-                                        contentDescription = null, // Or generic icon
-                                        tint = if (errorMessage != null) StitchNegative else textSecondary
-                                    )
-                                },
-                                colors = TextFieldDefaults.colors(
-                                    focusedContainerColor = if (errorMessage != null) StitchNegative.copy(alpha = 0.1f) 
-                                        else if(isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.05f),
-                                    unfocusedContainerColor = if (errorMessage != null) StitchNegative.copy(alpha = 0.1f) 
-                                        else if(isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.05f),
-                                    focusedIndicatorColor = Color.Transparent,
-                                    unfocusedIndicatorColor = Color.Transparent,
-                                    cursorColor = if (errorMessage != null) StitchNegative else primaryColor,
-                                    focusedTextColor = textPrimary,
-                                    unfocusedTextColor = textPrimary
-                                ),
-                                singleLine = true,
-                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                                keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) })
-                            )
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                                    keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) })
+                                )
+                            }
 
                             // Password
-                            TextField(
-                                value = password,
-                                onValueChange = { password = it },
-                                placeholder = { 
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("PASSWORD", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = textSecondary.copy(alpha = 0.7f), letterSpacing = 2.sp)
                                     Text(
-                                        "Password", 
-                                        color = if (errorMessage != null) StitchNegative.copy(alpha = 0.6f) else textSecondary.copy(alpha = 0.6f)
-                                    ) 
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(56.dp)
-                                    .border(
-                                        width = if (errorMessage != null) 2.dp else 0.dp,
-                                        color = if (errorMessage != null) StitchNegative else Color.Transparent,
-                                        shape = RoundedCornerShape(16.dp)
-                                    ),
-                                shape = RoundedCornerShape(16.dp),
-                                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                                leadingIcon = {
-                                     Icon(
-                                        imageVector = Icons.Default.Lock,
-                                        contentDescription = null,
-                                        tint = if (errorMessage != null) StitchNegative else textSecondary
+                                        text = "Lupa Password?",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = primaryColor,
+                                        modifier = Modifier.clickable { showForgotPasswordDialog = true; loginViewModel.resetForgotPasswordState() }
                                     )
-                                },
-                                trailingIcon = {
-                                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                        Icon(
-                                            imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                            contentDescription = null,
-                                            tint = if (errorMessage != null) StitchNegative else textSecondary
-                                        )
-                                    }
-                                },
-                                colors = TextFieldDefaults.colors(
-                                    focusedContainerColor = if (errorMessage != null) StitchNegative.copy(alpha = 0.1f) 
-                                        else if(isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.05f),
-                                    unfocusedContainerColor = if (errorMessage != null) StitchNegative.copy(alpha = 0.1f) 
-                                        else if(isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.05f),
-                                    focusedIndicatorColor = Color.Transparent,
-                                    unfocusedIndicatorColor = Color.Transparent,
-                                    cursorColor = if (errorMessage != null) StitchNegative else primaryColor,
-                                    focusedTextColor = textPrimary,
-                                    unfocusedTextColor = textPrimary
-                                ),
-                                singleLine = true,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-                                keyboardActions = KeyboardActions(onDone = {
-                                    focusManager.clearFocus()
-                                    loginViewModel.login(username, password)
-                                })
-                            )
+                                }
+                                TextField(
+                                    value = password,
+                                    onValueChange = { password = it },
+                                    placeholder = { Text("••••••••", color = textSecondary.copy(alpha = 0.4f), fontWeight = FontWeight.Bold, fontSize = 14.sp) },
+                                    modifier = Modifier.fillMaxWidth().height(58.dp),
+                                    shape = RoundedCornerShape(24.dp),
+                                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                                    leadingIcon = { Icon(Icons.Default.Lock, null, tint = if (errorMessage != null) StitchNegative else textSecondary.copy(alpha = 0.5f)) },
+                                    trailingIcon = {
+                                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                            Icon(if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff, null, tint = textSecondary.copy(alpha = 0.5f))
+                                        }
+                                    },
+                                    colors = TextFieldDefaults.colors(
+                                        focusedContainerColor = if (errorMessage != null) StitchNegative.copy(alpha = 0.08f) else if(isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFF8FAFC),
+                                        unfocusedContainerColor = if (errorMessage != null) StitchNegative.copy(alpha = 0.08f) else if(isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFF8FAFC),
+                                        focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
+                                        cursorColor = if (errorMessage != null) StitchNegative else primaryColor,
+                                        focusedTextColor = textPrimary, unfocusedTextColor = textPrimary
+                                    ),
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus(); loginViewModel.login(username, password) })
+                                )
+                            }
 
-                            // Remember Me Checkbox
+                            // Remember Me
                             Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { rememberMe = !rememberMe },
+                                modifier = Modifier.fillMaxWidth().padding(start = 4.dp).clickable { rememberMe = !rememberMe },
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Checkbox(
                                     checked = rememberMe,
                                     onCheckedChange = { rememberMe = it },
-                                    colors = CheckboxDefaults.colors(
-                                        checkedColor = primaryColor,
-                                        uncheckedColor = textSecondary,
-                                        checkmarkColor = Color.White
-                                    )
+                                    colors = CheckboxDefaults.colors(checkedColor = primaryColor, uncheckedColor = textSecondary, checkmarkColor = Color.White),
+                                    modifier = Modifier.size(20.dp)
                                 )
-                                Text(
-                                    text = "Ingat Saya",
-                                    color = textPrimary,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text("Ingat Saya", color = textSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
 
                             if (errorMessage != null) {
@@ -393,6 +389,18 @@ fun LoginScreen(
                                             Text("Coba Lagi", color = Color.White, fontWeight = FontWeight.Bold)
                                         }
                                     },
+                                    dismissButton = {
+                                        TextButton(
+                                            onClick = {
+                                                errorMessage = null
+                                                loginViewModel.resetLoginState()
+                                                showForgotPasswordDialog = true
+                                                loginViewModel.resetForgotPasswordState()
+                                            }
+                                        ) {
+                                            Text("Lupa Password?", color = primaryColor, fontWeight = FontWeight.Bold)
+                                        }
+                                    },
                                     containerColor = if (isDark) Color(0xFF1E1E2D) else Color.White,
                                     shape = RoundedCornerShape(24.dp),
                                     icon = {
@@ -408,32 +416,94 @@ fun LoginScreen(
 
                             Spacer(modifier = Modifier.height(8.dp))
 
-                            // Login Button
+                            // Login Button - Gradient
                             Button(
+                                onClick = { focusManager.clearFocus(); loginViewModel.login(username, password) },
+                                modifier = Modifier.fillMaxWidth().height(58.dp),
+                                enabled = loginUiState !is LoginUiState.Loading,
+                                shape = RoundedCornerShape(24.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = Color.White)
+                            ) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize()
+                                        .background(Brush.horizontalGradient(listOf(primaryColor, Color(0xFF059669))), RoundedCornerShape(24.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (loginUiState is LoginUiState.Loading) {
+                                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White, strokeWidth = 2.dp)
+                                    } else {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text("Masuk Sekarang", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                                            Spacer(Modifier.width(8.dp))
+                                            Icon(Icons.Default.ArrowForward, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Social Divider
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                HorizontalDivider(modifier = Modifier.weight(1f), color = glassBorderColor)
+                                Text(
+                                    text = "ATAU",
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = textSecondary.copy(alpha = 0.6f)
+                                )
+                                HorizontalDivider(modifier = Modifier.weight(1f), color = glassBorderColor)
+                            }
+
+                            // Google Login Button
+                            OutlinedButton(
                                 onClick = {
                                     focusManager.clearFocus()
-                                    loginViewModel.login(username, password)
+                                    googleSignInLauncher.launch(googleSignInClient.signInIntent)
                                 },
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(56.dp)
-                                    .shadow(12.dp, CircleShape, spotColor = primaryColor.copy(alpha = 0.5f)),
-                                enabled = loginUiState !is LoginUiState.Loading,
+                                    .height(56.dp),
                                 shape = CircleShape,
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = primaryColor,
-                                    contentColor = Color.White
+                                border = BorderStroke(1.dp, glassBorderColor),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = textPrimary
                                 )
                             ) {
-                                if (loginUiState is LoginUiState.Loading) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(24.dp),
-                                        color = Color.White,
-                                        strokeWidth = 2.dp
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Image(
+                                        painter = painterResource(id = R.drawable.ic_google_logo),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(24.dp)
                                     )
-                                } else {
-                                    Text("Masuk", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        text = "Masuk dengan Google",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 }
+                            }
+
+                            // Footer - inside card
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Text("Belum punya akun? ", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = textSecondary)
+                                Text(
+                                    text = "Daftar Sini",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = primaryColor,
+                                    modifier = Modifier.clickable { onNavigateToRegister() }
+                                )
                             }
                         }
                     }
@@ -463,7 +533,7 @@ fun LoginScreen(
                             )
                         },
                         text = {
-                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(KassakuSpacing.elementGap + 4.dp)) {
                                 Text(
                                     text = blockedInfo?.message ?: "Akun Anda sedang ditangguhkan oleh admin.",
                                     color = textSecondary,
@@ -521,7 +591,7 @@ fun LoginScreen(
                                     }
                                 }
 
-                                Divider(color = glassBorderColor)
+                                HorizontalDivider(color = glassBorderColor)
 
                                 Text(
                                     text = if (hasPendingUnblock) "Status Permintaan Unblock" else "Ajukan Permintaan Unblock",
@@ -622,7 +692,7 @@ fun LoginScreen(
                         },
                         title = {
                             Text(
-                                text = if (isApproved) "🎉 Permintaan Disetujui!" else "❌ Permintaan Ditolak",
+                                text = if (isApproved) "Permintaan Disetujui!" else "Permintaan Ditolak",
                                 fontWeight = FontWeight.Bold,
                                 color = textPrimary
                             )
@@ -663,42 +733,243 @@ fun LoginScreen(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(32.dp))
-
-                // Footer
-                AnimatedVisibility(
-                    visible = visible,
-                    enter = fadeIn(tween(800, delayMillis = 600))
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(glassColor.copy(alpha = 0.3f))
-                            .border(0.5.dp, glassBorderColor, RoundedCornerShape(12.dp))
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Belum punya akun? ",
-                            fontSize = 14.sp,
-                            color = textSecondary
-                        )
-                        Text(
-                            text = "Daftar",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = primaryColor,
-                            modifier = Modifier.clickable { onNavigateToRegister() }
-                        )
-                    }
+                if (showForgotPasswordDialog) {
+                    ForgotPasswordDialog(
+                        uiState = forgotPasswordUiState,
+                        onDismiss = { 
+                            showForgotPasswordDialog = false
+                            loginViewModel.resetForgotPasswordState()
+                        },
+                        onSendOtp = { u, e -> loginViewModel.sendOtp(u, e) },
+                        onVerifyOtp = { u, e, o -> loginViewModel.verifyOtp(u, e, o) },
+                        onResetPassword = { u, e, o, p -> loginViewModel.resetPassword(u, e, o, p) },
+                        isDark = isDark
+                    )
                 }
+
+                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }
 }
 
+@Composable
+fun ForgotPasswordDialog(
+    uiState: com.example.kassaku.viewmodel.ForgotPasswordState,
+    onDismiss: () -> Unit,
+    onSendOtp: (String, String) -> Unit,
+    onVerifyOtp: (String, String, String) -> Unit,
+    onResetPassword: (String, String, String, String) -> Unit,
+    isDark: Boolean
+) {
+    var username by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var otp by remember { mutableStateOf("") }
+    var newPassword by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
+    
+    val textPrimary = if (isDark) Color.White else Color(0xFF1E293B)
+    val textSecondary = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Pemulihan Akun",
+                fontWeight = FontWeight.Bold,
+                color = textPrimary
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                when (uiState) {
+                    is com.example.kassaku.viewmodel.ForgotPasswordState.Idle, 
+                    is com.example.kassaku.viewmodel.ForgotPasswordState.Loading,
+                    is com.example.kassaku.viewmodel.ForgotPasswordState.PasswordResetError -> {
+                        
+                        if (uiState is com.example.kassaku.viewmodel.ForgotPasswordState.Idle || 
+                            uiState is com.example.kassaku.viewmodel.ForgotPasswordState.Loading ||
+                            (uiState is com.example.kassaku.viewmodel.ForgotPasswordState.PasswordResetError && otp.isEmpty())) {
+                            
+                            Text(
+                                text = "Masukkan username dan email yang sama seperti saat registrasi.",
+                                fontSize = 14.sp,
+                                color = textSecondary
+                            )
+
+                            OutlinedTextField(
+                                value = username,
+                                onValueChange = { username = it },
+                                label = { Text("Username") },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                                enabled = uiState !is com.example.kassaku.viewmodel.ForgotPasswordState.Loading
+                            )
+                            
+                            OutlinedTextField(
+                                value = email,
+                                onValueChange = { email = it },
+                                label = { Text("Email") },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                                enabled = uiState !is com.example.kassaku.viewmodel.ForgotPasswordState.Loading
+                            )
+                        } else if (otp.isNotEmpty() || uiState is com.example.kassaku.viewmodel.ForgotPasswordState.OtpSent) {
+                             // This part is handled by the next case, but let's keep it safe
+                        }
+                    }
+                    
+                    is com.example.kassaku.viewmodel.ForgotPasswordState.OtpSent -> {
+                        Text(
+                            text = "Kode OTP telah dikirim ke ${uiState.email}. Periksa kotak masuk Anda.",
+                            fontSize = 14.sp,
+                            color = textSecondary
+                        )
+                        
+                        OutlinedTextField(
+                            value = otp,
+                            onValueChange = { if (it.length <= 6) otp = it },
+                            label = { Text("Kode OTP (6 Digit)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center)
+                        )
+                    }
+
+                    is com.example.kassaku.viewmodel.ForgotPasswordState.OtpVerified -> {
+                        Text(
+                            text = "OTP Berhasil diverifikasi. Silakan masukkan password baru Anda.",
+                            fontSize = 14.sp,
+                            color = textSecondary
+                        )
+                        
+                        OutlinedTextField(
+                            value = newPassword,
+                            onValueChange = { newPassword = it },
+                            label = { Text("Password Baru") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            singleLine = true,
+                            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon = {
+                                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                    Icon(
+                                        imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                        contentDescription = null,
+                                        tint = textSecondary
+                                    )
+                                }
+                            }
+                        )
+
+                        OutlinedTextField(
+                            value = confirmPassword,
+                            onValueChange = { confirmPassword = it },
+                            label = { Text("Konfirmasi Password") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            singleLine = true,
+                            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation()
+                        )
+                    }
+
+                    is com.example.kassaku.viewmodel.ForgotPasswordState.PasswordResetSuccess -> {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                            Icon(
+                                imageVector = androidx.compose.material.icons.Icons.Default.Check,
+                                contentDescription = null,
+                                tint = Color(0xFF10B981),
+                                modifier = Modifier.size(64.dp)
+                            )
+                            Spacer(Modifier.height(16.dp))
+                            Text(
+                                text = uiState.message,
+                                textAlign = TextAlign.Center,
+                                fontWeight = FontWeight.Bold,
+                                color = textPrimary
+                            )
+                        }
+                    }
+                }
+
+                if (uiState is com.example.kassaku.viewmodel.ForgotPasswordState.PasswordResetError) {
+                    Text(
+                        text = uiState.message,
+                        color = StitchNegative,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            when (uiState) {
+                is com.example.kassaku.viewmodel.ForgotPasswordState.Idle, 
+                is com.example.kassaku.viewmodel.ForgotPasswordState.PasswordResetError -> {
+                    if (otp.isEmpty() && uiState !is com.example.kassaku.viewmodel.ForgotPasswordState.OtpSent) {
+                        Button(
+                            onClick = { onSendOtp(username.trim(), email.trim()) },
+                            enabled = username.trim().length >= 2 && email.isNotBlank(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Kirim OTP")
+                        }
+                    } else if (otp.isNotEmpty() || uiState is com.example.kassaku.viewmodel.ForgotPasswordState.OtpSent) {
+                        // Handled by OtpSent case below
+                    }
+                }
+                is com.example.kassaku.viewmodel.ForgotPasswordState.Loading -> {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                }
+                    is com.example.kassaku.viewmodel.ForgotPasswordState.OtpSent -> {
+                        Button(
+                        onClick = { onVerifyOtp(uiState.username, uiState.email, otp) },
+                        enabled = otp.length == 6,
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Verifikasi OTP")
+                    }
+                }
+                    is com.example.kassaku.viewmodel.ForgotPasswordState.OtpVerified -> {
+                    Button(
+                        onClick = { onResetPassword(uiState.username, uiState.email, uiState.otp, newPassword) },
+                        enabled = newPassword.length >= 8 && newPassword == confirmPassword,
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Reset Password")
+                    }
+                }
+                is com.example.kassaku.viewmodel.ForgotPasswordState.PasswordResetSuccess -> {
+                    Button(onClick = onDismiss, shape = RoundedCornerShape(12.dp)) {
+                        Text("Selesai")
+                    }
+                }
+            }
+        },
+        dismissButton = {
+            if (uiState !is com.example.kassaku.viewmodel.ForgotPasswordState.PasswordResetSuccess) {
+                TextButton(onClick = onDismiss) {
+                    Text("Batal", color = textSecondary)
+                }
+            }
+        },
+        containerColor = if (isDark) Color(0xFF1E1E2D) else Color.White,
+        shape = RoundedCornerShape(28.dp)
+    )
+}
+
 @Preview(showBackground = true)
 @Composable
 fun LoginScreenPreview() {
-    LoginScreen(onLoginSuccess = { _, _ -> }, onNavigateToRegister = {}, onSyncFCM = {})
+    LoginScreen(onLoginSuccess = { _, _ -> }, onNavigateToRegister = {}, onNavigateToForgotPassword = {}, onSyncFCM = {})
 }

@@ -1,5 +1,6 @@
 package com.example.kassaku.viewmodel
 
+import com.example.kassaku.ui.model.NotificationInboxItem
 import okhttp3.ResponseBody
 
 sealed class PemasukanResult {
@@ -64,4 +65,11 @@ sealed class BudgetActionResult {
     object Loading : BudgetActionResult()
     data class Success(val message: String) : BudgetActionResult()
     data class Error(val message: String) : BudgetActionResult()
+}
+
+sealed class NotificationUiState {
+    object Idle : NotificationUiState()
+    object Loading : NotificationUiState()
+    data class Success(val items: List<NotificationInboxItem>) : NotificationUiState()
+    data class Error(val message: String) : NotificationUiState()
 }

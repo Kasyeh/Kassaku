@@ -9,9 +9,11 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import com.example.kassaku.utils.isEmulator
 
 /**
  * Shimmer effect configuration for skeleton loading.
@@ -44,19 +46,24 @@ fun rememberShimmerBrush(
         )
     }
 
+    val isEmulator = remember { isEmulator() }
     val transition = rememberInfiniteTransition(label = "shimmer")
-    val translateAnimation by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1000f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = ShimmerConfig.ANIMATION_DURATION_MS,
-                easing = LinearEasing
+    val translateAnimation by if (isEmulator) {
+        remember { mutableStateOf(500f) }
+    } else {
+        transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1000f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(
+                    durationMillis = ShimmerConfig.ANIMATION_DURATION_MS,
+                    easing = LinearEasing
+                ),
+                repeatMode = RepeatMode.Restart
             ),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "shimmerOffset"
-    )
+            label = "shimmerOffset"
+        )
+    }
 
     return Brush.linearGradient(
         colors = shimmerColors,

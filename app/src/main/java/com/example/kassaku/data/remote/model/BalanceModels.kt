@@ -11,6 +11,10 @@ data class BalanceResponse(
 data class BalanceData(
     @SerializedName("id_user") val idUser: Int,
     @SerializedName("username") val username: String,
+    @SerializedName("email") val email: String? = null,
+    @SerializedName("avatar") val avatar: String? = null,
+    @SerializedName("currency") val currency: String = "IDR",
+    @SerializedName("currency_format") val currencyFormat: String = "standard",
     @SerializedName("saldo") val saldo: String,
     @SerializedName("pemasukan") val pemasukan: String,
     @SerializedName("pengeluaran") val pengeluaran: String,

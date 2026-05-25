@@ -1,11 +1,13 @@
 package com.example.kassaku.ui
 
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.PieChart
+import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -37,6 +39,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import kotlin.math.roundToInt
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.kassaku.ui.theme.KassakuSpacing
 import com.example.kassaku.ui.theme.*
 import com.example.kassaku.viewmodel.HomeViewModel
 import com.example.kassaku.viewmodel.ImpianUiState
@@ -58,11 +61,22 @@ import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingFlat
 import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material.icons.filled.WarningAmber
+import com.example.kassaku.data.remote.model.DreamForecastItem
+import com.example.kassaku.data.remote.model.ImpianItem
 import com.example.kassaku.data.remote.model.BudgetKategoriItem
 import com.example.kassaku.data.remote.model.CashflowPeriodData
 import com.example.kassaku.data.remote.model.MotivasiItem
+import com.example.kassaku.data.remote.model.RiwayatItem
 import com.example.kassaku.data.remote.model.StatistikData
+import com.example.kassaku.data.remote.model.StatistikSummaryData
+import com.example.kassaku.ui.components.form.TransactionFormSheet
+import com.example.kassaku.ui.components.form.TransactionFormState
 import com.example.kassaku.viewmodel.BudgetActionResult
+import com.example.kassaku.viewmodel.PemasukanResult
+import com.example.kassaku.viewmodel.PengeluaranResult
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
 import java.util.Locale
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.text.KeyboardOptions
@@ -77,6 +91,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 
 private enum class CashflowChartUiState {
     Loading,
@@ -168,6 +183,7 @@ private fun formatSignedPercent(value: Double): String {
     return "$sign${String.format(Locale.US, "%.1f", value)}%"
 }
 
+@OptIn(ExperimentalMaterialApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun StatistikScreen(
     userId: Int,
@@ -176,6 +192,7 @@ fun StatistikScreen(
     onNavigateToImpian: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val isDark = LocalIsDark.current
     val backgroundColor = if (isDark) iOSBackgroundDark else iOSBackgroundLight
     val textPrimary = if (isDark) iOSLabelDark else iOSLabelLight
@@ -183,11 +200,57 @@ fun StatistikScreen(
     val statistikData by homeViewModel.statistikData.collectAsStateWithLifecycle()
     val impianUiState by homeViewModel.impianUiState.collectAsStateWithLifecycle()
     val budgetActionResult by homeViewModel.budgetActionResult.collectAsStateWithLifecycle()
+    val aiInsightState by homeViewModel.aiInsightState.collectAsStateWithLifecycle()
 
     var showBudgetDialog by remember { mutableStateOf(false) }
     var showHapusBudgetDialog by remember { mutableStateOf(false) }
+    var showPemasukanSheet by remember { mutableStateOf(false) }
+    var showPengeluaranSheet by remember { mutableStateOf(false) }
+    var pemasukanFormState by remember { mutableStateOf<TransactionFormState>(TransactionFormState.Idle) }
+    var pengeluaranFormState by remember { mutableStateOf<TransactionFormState>(TransactionFormState.Idle) }
     var budgetIdToDelete by remember { mutableStateOf<Int?>(null) }
     var selectedCashflowPeriod by remember { mutableStateOf("30d") }
+
+    LaunchedEffect(homeViewModel, userId) {
+        launch {
+            homeViewModel.pemasukanResult.collectLatest { result ->
+                when (result) {
+                    is PemasukanResult.Success -> {
+                        Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
+                        homeViewModel.resetPemasukanResult()
+                        pemasukanFormState = TransactionFormState.Success
+                        showPemasukanSheet = false
+                        homeViewModel.loadBalanceData(userId)
+                        homeViewModel.fetchStatistik(userId)
+                    }
+                    is PemasukanResult.Error -> {
+                        pemasukanFormState = TransactionFormState.Error(result.message)
+                        homeViewModel.resetPemasukanResult()
+                    }
+                    else -> Unit
+                }
+            }
+        }
+        launch {
+            homeViewModel.pengeluaranResult.collectLatest { result ->
+                when (result) {
+                    is PengeluaranResult.Success -> {
+                        Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
+                        homeViewModel.resetPengeluaranResult()
+                        pengeluaranFormState = TransactionFormState.Success
+                        showPengeluaranSheet = false
+                        homeViewModel.loadBalanceData(userId)
+                        homeViewModel.fetchStatistik(userId)
+                    }
+                    is PengeluaranResult.Error -> {
+                        pengeluaranFormState = TransactionFormState.Error(result.message)
+                        homeViewModel.resetPengeluaranResult()
+                    }
+                    else -> Unit
+                }
+            }
+        }
+    }
 
     LaunchedEffect(budgetActionResult) {
         if (budgetActionResult is BudgetActionResult.Success) {
@@ -212,6 +275,12 @@ fun StatistikScreen(
             availableSeries.containsKey("30d") -> "30d"
             availableSeries.isNotEmpty() -> availableSeries.keys.first()
             else -> "30d"
+        }
+    }
+
+    LaunchedEffect(selectedCashflowPeriod, userId) {
+        if (userId != 0) {
+            homeViewModel.fetchAiInsight(userId, selectedCashflowPeriod)
         }
     }
 
@@ -240,16 +309,6 @@ fun StatistikScreen(
                         color = textPrimary,
                         style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold)
                     )
-                    
-                    IconButton(
-                        onClick = { homeViewModel.logout() },
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                            contentDescription = "Logout",
-                            tint = textPrimary
-                        )
-                    }
                 }
             }
             
@@ -258,17 +317,22 @@ fun StatistikScreen(
             // Content
             LazyColumn(
                 modifier = modifier.fillMaxSize(),
-                contentPadding = PaddingValues(24.dp),
-                verticalArrangement = Arrangement.spacedBy(24.dp)
+                contentPadding = PaddingValues(
+                    start = KassakuSpacing.screenHorizontal,
+                    end = KassakuSpacing.screenHorizontal,
+                    top = KassakuSpacing.screenVertical,
+                    bottom = KassakuSpacing.listBottom
+                ),
+                verticalArrangement = Arrangement.spacedBy(KassakuSpacing.sectionGap)
             ) {
             item {
                 val data = statistikData
                 if (data != null) {
-                    CashflowChartsSection(
+                    StatistikOverviewSection(
                         data = data,
-                        isDark = isDark,
-                        selectedPeriod = selectedCashflowPeriod,
-                        onPeriodChange = { selectedCashflowPeriod = it }
+                        onTambahPemasukan = { showPemasukanSheet = true },
+                        onTambahPengeluaran = { showPengeluaranSheet = true },
+                        isDark = isDark
                     )
                 } else {
                     SkeletonChartView(
@@ -281,9 +345,9 @@ fun StatistikScreen(
             item {
                 val data = statistikData
                 if (data != null) {
-                    FinancialInsightsSection(
-                        data = data,
-                        selectedPeriod = selectedCashflowPeriod,
+                    MonthlySummarySection(
+                        summary = data.summary,
+                        fallbackSeries = resolveCashflowPeriodData(data, selectedCashflowPeriod),
                         isDark = isDark
                     )
                 }
@@ -291,9 +355,11 @@ fun StatistikScreen(
 
             item {
                 val data = statistikData
-                if (data != null && !data.motivasi.isNullOrEmpty()) {
-                    MotivationCarousel(
-                        motivasi = data.motivasi,
+                if (data != null) {
+                    FinancialInsightsSection(
+                        data = data,
+                        selectedPeriod = selectedCashflowPeriod,
+                        aiInsightState = aiInsightState,
                         isDark = isDark
                     )
                 }
@@ -317,12 +383,35 @@ fun StatistikScreen(
             item {
                 val data = statistikData
                 val impianState = impianUiState
-                if (data != null && impianState is ImpianUiState.Success) {
-                    DreamProjectionSection(
-                        data = data,
-                        impianItems = impianState.impianItems,
+                if (data != null) {
+                    DreamForecastSection(
+                        forecastItems = data.dreamForecast.orEmpty(),
+                        fallbackImpianItems = if (impianState is ImpianUiState.Success) impianState.impianItems else emptyList(),
                         isDark = isDark,
                         onNavigateToImpian = onNavigateToImpian
+                    )
+                }
+            }
+
+            item {
+                val data = statistikData
+                if (data != null) {
+                    CashflowChartsSection(
+                        data = data,
+                        isDark = isDark,
+                        selectedPeriod = selectedCashflowPeriod,
+                        onPeriodChange = { selectedCashflowPeriod = it },
+                        includeCategoryChart = true
+                    )
+                }
+            }
+
+            item {
+                val data = statistikData
+                if (data != null) {
+                    RecentActivitySection(
+                        transactions = data.recentTransactions.orEmpty(),
+                        isDark = isDark
                     )
                 }
             }
@@ -366,6 +455,40 @@ fun StatistikScreen(
                 }
             )
         }
+
+        TransactionFormSheet(
+            isVisible = showPemasukanSheet,
+            isExpense = false,
+            formState = pemasukanFormState,
+            onDismiss = { showPemasukanSheet = false },
+            onSubmit = { formData ->
+                pemasukanFormState = TransactionFormState.Submitting
+                homeViewModel.tambahPemasukan(
+                    userId,
+                    formData.amount.toLong(),
+                    formData.category,
+                    formData.notes,
+                    SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(java.util.Date(formData.date))
+                )
+            }
+        )
+
+        TransactionFormSheet(
+            isVisible = showPengeluaranSheet,
+            isExpense = true,
+            formState = pengeluaranFormState,
+            onDismiss = { showPengeluaranSheet = false },
+            onSubmit = { formData ->
+                pengeluaranFormState = TransactionFormState.Submitting
+                homeViewModel.tambahPengeluaran(
+                    userId,
+                    formData.amount.toLong(),
+                    formData.category,
+                    formData.notes,
+                    SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(java.util.Date(formData.date))
+                )
+            }
+        )
     }
 }
 }
@@ -409,7 +532,7 @@ fun SmoothLineChart(
         shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(containerColor = surfaceColor)
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
+        Column(modifier = Modifier.padding(KassakuSpacing.cardInnerLarge)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -624,7 +747,7 @@ fun TooltipView(month: String, masuk: Double, keluar: Double, isDark: Boolean, m
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
         modifier = modifier.wrapContentSize()
     ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(modifier = Modifier.padding(KassakuSpacing.elementGap + 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(text = month, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = if (isDark) Color.White else Color.Black)
             TooltipRow(label = "Masuk", value = formatCurrency(masuk), color = StitchPrimary)
             TooltipRow(label = "Keluar", value = formatCurrency(keluar), color = StitchAccentRed)
@@ -647,34 +770,227 @@ fun formatCurrency(amount: Double): String {
     return "Rp ${String.format("%,.0f", amount).replace(',', '.')}"
 }
 
+private fun fallbackSummaryFromSeries(series: CashflowPeriodData): StatistikSummaryData {
+    return StatistikSummaryData(
+        monthlyPemasukan = series.totalIncome,
+        monthlyPengeluaran = series.totalExpense
+    )
+}
+
+@Composable
+private fun StatistikOverviewSection(
+    data: StatistikData,
+    onTambahPemasukan: () -> Unit,
+    onTambahPengeluaran: () -> Unit,
+    isDark: Boolean
+) {
+    val summary = data.summary ?: fallbackSummaryFromSeries(resolveCashflowPeriodData(data, data.defaultCashflowPeriod ?: "30d"))
+    val surfaceColor = if (isDark) iOSGroupedBackgroundDark else Color.White
+    val textColor = if (isDark) Color.White else iOSLabelLight
+    val secondaryColor = if (isDark) iOSSecondaryLabelDark else iOSSecondaryLabelLight
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(12.dp, RoundedCornerShape(28.dp), spotColor = StitchPrimary.copy(alpha = 0.18f)),
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(containerColor = surfaceColor),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            StitchPrimary.copy(alpha = if (isDark) 0.28f else 0.16f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(KassakuSpacing.cardInnerLarge),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(StitchPrimary.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Payments, contentDescription = null, tint = StitchPrimary)
+                }
+                Spacer(modifier = Modifier.width(14.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Saldo Aktif",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Black,
+                        color = secondaryColor,
+                        letterSpacing = 1.sp
+                    )
+                    Text(
+                        text = formatCurrency(summary.saldo),
+                        fontSize = summaryBalanceFontSize(summary.saldo),
+                        fontWeight = FontWeight.Black,
+                        color = textColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        letterSpacing = 0.sp
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Button(
+                    onClick = onTambahPemasukan,
+                    modifier = Modifier.weight(1f).height(52.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = StitchPrimary)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Pemasukan", fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Button(
+                    onClick = onTambahPengeluaran,
+                    modifier = Modifier.weight(1f).height(52.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = StitchAccentRed)
+                ) {
+                    Text("-", fontSize = 22.sp, fontWeight = FontWeight.Black)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Pengeluaran", fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+    }
+}
+
+private fun summaryBalanceFontSize(value: Double): androidx.compose.ui.unit.TextUnit {
+    val length = formatCurrency(value).length
+    return when {
+        length > 22 -> 24.sp
+        length > 18 -> 28.sp
+        length > 14 -> 32.sp
+        else -> 36.sp
+    }
+}
+
+@Composable
+private fun MonthlySummarySection(
+    summary: StatistikSummaryData?,
+    fallbackSeries: CashflowPeriodData,
+    isDark: Boolean
+) {
+    val resolvedSummary = summary ?: fallbackSummaryFromSeries(fallbackSeries)
+    Column(verticalArrangement = Arrangement.spacedBy(KassakuSpacing.elementGap + 4.dp)) {
+        Text(
+            text = "Bulan Ini",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = if (isDark) Color.White else iOSLabelLight
+        )
+        MonthlyMoneyCard(
+            title = "Pemasukan Bulan Ini",
+            value = resolvedSummary.monthlyPemasukan,
+            subtitle = "Total uang masuk bulan berjalan",
+            toneColor = StitchPrimary,
+            isDark = isDark
+        )
+        MonthlyMoneyCard(
+            title = "Pengeluaran Bulan Ini",
+            value = resolvedSummary.monthlyPengeluaran,
+            subtitle = resolvedSummary.targetPengeluaran?.let { "Target ${formatCurrency(it)}" } ?: "Target belum diatur",
+            toneColor = StitchAccentRed,
+            isDark = isDark,
+            progress = resolvedSummary.targetProgressPercent,
+            isWarning = resolvedSummary.isOverBudget
+        )
+    }
+}
+
+@Composable
+private fun MonthlyMoneyCard(
+    title: String,
+    value: Double,
+    subtitle: String,
+    toneColor: Color,
+    isDark: Boolean,
+    progress: Double? = null,
+    isWarning: Boolean = false
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = if (isDark) iOSGroupedBackgroundDark else Color.White),
+        border = androidx.compose.foundation.BorderStroke(1.dp, toneColor.copy(alpha = 0.16f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(KassakuSpacing.cardInnerLarge),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(title, fontSize = 13.sp, fontWeight = FontWeight.Black, color = if (isDark) iOSSecondaryLabelDark else iOSSecondaryLabelLight)
+            Text(
+                text = formatCurrency(value),
+                fontSize = if (formatCurrency(value).length > 18) 24.sp else 28.sp,
+                fontWeight = FontWeight.Black,
+                color = toneColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                letterSpacing = 0.sp
+            )
+            Text(
+                text = subtitle,
+                fontSize = 12.sp,
+                color = if (isWarning) StitchAccentRed else if (isDark) iOSSecondaryLabelDark else iOSSecondaryLabelLight,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            progress?.let {
+                LinearProgressIndicator(
+                    progress = { (it / 100.0).toFloat().coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(999.dp)),
+                    color = if (isWarning) StitchAccentRed else toneColor,
+                    trackColor = toneColor.copy(alpha = 0.12f)
+                )
+            }
+        }
+    }
+}
+
 
 @Composable
 fun FinancialInsightsSection(
     data: StatistikData,
     selectedPeriod: String,
+    aiInsightState: com.example.kassaku.viewmodel.AiInsightUiState,
     isDark: Boolean
 ) {
     val series = remember(data, selectedPeriod) { resolveCashflowPeriodData(data, selectedPeriod) }
     val labels = series.labels
     val pemasukan = series.income
     val pengeluaran = series.expense
-    
-    // Calculations
     val nets = pemasukan.zip(pengeluaran) { inc, exp -> inc - exp }
-    val avgSavings = if (nets.isNotEmpty()) nets.average() else 0.0
-    
-    // Only calculate comparative insights if we have contextual data (more than 1 month)
+    val summary = data.summary
+    val avgSavings = summary?.avgSavings ?: if (nets.isNotEmpty()) nets.average() else 0.0
     val hasEnoughData = labels.size > 1
-    
     val mostWastefulIndex = if (hasEnoughData) pengeluaran.indices.maxByOrNull { pengeluaran[it] } ?: -1 else -1
     val mostProductiveIndex = if (hasEnoughData) nets.indices.maxByOrNull { nets[it] } ?: -1 else -1
-    val unitLabel = if (isDailyCashflowPeriod(selectedPeriod)) "Hari" else "Bulan"
-    
-    val trend = if (nets.size >= 2) {
+    val fallbackTrend = if (nets.size >= 2) {
         val last = nets.last()
         val prev = nets[nets.size - 2]
         if (last > prev) "Meningkat" else if (last < prev) "Menurun" else "Stabil"
     } else "Stabil"
+    val trend = summary?.trend ?: fallbackTrend
+    val mostProductive = summary?.mostProductiveMonth ?: if (mostProductiveIndex != -1) labels[mostProductiveIndex] else "-"
+    val mostWasteful = summary?.mostWastefulMonth ?: if (mostWastefulIndex != -1) labels[mostWastefulIndex] else "-"
+
+    // AI Insight Card
+    AiInsightCard(aiInsightState = aiInsightState, isDark = isDark)
+    
+    Spacer(modifier = Modifier.height(24.dp))
 
     Text(
         text = "Tips Keuangan",
@@ -698,8 +1014,8 @@ fun FinancialInsightsSection(
             modifier = Modifier.weight(1f)
         )
         InsightCard(
-            title = "$unitLabel Terhemat",
-            value = if (mostProductiveIndex != -1) labels[mostProductiveIndex] else "-",
+            title = "Bulan Terhemat",
+            value = mostProductive,
             icon = Icons.Default.WorkspacePremium,
             color = Color(0xFF34C759),
             isDark = isDark,
@@ -714,15 +1030,15 @@ fun FinancialInsightsSection(
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         InsightCard(
-            title = "$unitLabel Terboros",
-            value = if (mostWastefulIndex != -1) labels[mostWastefulIndex] else "-",
+            title = "Bulan Terboros",
+            value = mostWasteful,
             icon = Icons.Default.WarningAmber,
             color = StitchAccentRed,
             isDark = isDark,
             modifier = Modifier.weight(1f)
         )
         InsightCard(
-            title = "Tren ${periodLabelMap[selectedPeriod] ?: selectedPeriod}",
+            title = "Tren Finansial",
             value = trend,
             icon = when (trend) {
                 "Meningkat" -> Icons.Default.TrendingUp
@@ -733,6 +1049,93 @@ fun FinancialInsightsSection(
             isDark = isDark,
             modifier = Modifier.weight(1f)
         )
+    }
+}
+
+@Composable
+fun AiInsightCard(
+    aiInsightState: com.example.kassaku.viewmodel.AiInsightUiState,
+    isDark: Boolean
+) {
+    AnimatedVisibility(
+        visible = aiInsightState !is com.example.kassaku.viewmodel.AiInsightUiState.Idle,
+        enter = fadeIn() + slideInVertically(initialOffsetY = { -20 })
+    ) {
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9) // Slate 800 or Slate 100
+            ),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(KassakuSpacing.cardInnerLarge)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = "AI",
+                        tint = StitchPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = "KasSaku AI Insight",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isDark) Color.White else iOSLabelLight
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                when (aiInsightState) {
+                    is com.example.kassaku.viewmodel.AiInsightUiState.Loading -> {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            androidx.compose.material3.CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                color = StitchPrimary,
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Sedang menganalisis...",
+                                fontSize = 14.sp,
+                                color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B) // Slate 400 or 500
+                            )
+                        }
+                    }
+                    is com.example.kassaku.viewmodel.AiInsightUiState.Success -> {
+                        val parsedInsight = androidx.core.text.HtmlCompat.fromHtml(
+                            aiInsightState.insight,
+                            androidx.core.text.HtmlCompat.FROM_HTML_MODE_COMPACT
+                        ).toString()
+                        
+                        Text(
+                            text = parsedInsight,
+                            fontSize = 14.sp,
+                            lineHeight = 20.sp,
+                            color = if (isDark) Color(0xFFCBD5E1) else Color(0xFF334155) // Slate 300 or 700
+                        )
+                    }
+                    is com.example.kassaku.viewmodel.AiInsightUiState.Error -> {
+                        Text(
+                            text = aiInsightState.message,
+                            fontSize = 14.sp,
+                            color = StitchAccentRed,
+                            fontStyle = FontStyle.Italic
+                        )
+                    }
+                    else -> {}
+                }
+            }
+        }
     }
 }
 
@@ -753,7 +1156,7 @@ fun InsightCard(
         modifier = modifier.height(100.dp)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(KassakuSpacing.cardInner),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Icon(
@@ -763,8 +1166,8 @@ fun InsightCard(
                 modifier = Modifier.size(20.dp)
             )
             Column {
-                Text(text = title, fontSize = 10.sp, color = iOSSecondaryLabelLight)
-                Text(text = value, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color.White else Color.Black)
+                Text(text = title, fontSize = 10.sp, color = iOSSecondaryLabelLight, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(text = value, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color.White else Color.Black, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -777,17 +1180,18 @@ fun ProgressComparisonSection(
     isDark: Boolean
 ) {
     val series = remember(data, selectedPeriod) { resolveCashflowPeriodData(data, selectedPeriod) }
-    val monthlyPemasukan = series.income.lastOrNull() ?: 0.0
-    val monthlyPengeluaran = series.expense.lastOrNull() ?: 0.0
-    val prevMonthPemasukan = if (series.income.size >= 2) series.income[series.income.size - 2] else 0.0
-    val prevMonthPengeluaran = if (series.expense.size >= 2) series.expense[series.expense.size - 2] else 0.0
+    val summary = data.summary
+    val monthlyPemasukan = summary?.monthlyPemasukan ?: (series.income.lastOrNull() ?: 0.0)
+    val monthlyPengeluaran = summary?.monthlyPengeluaran ?: (series.expense.lastOrNull() ?: 0.0)
+    val prevMonthPemasukan = summary?.prevMonthPemasukan ?: if (series.income.size >= 2) series.income[series.income.size - 2] else 0.0
+    val prevMonthPengeluaran = summary?.prevMonthPengeluaran ?: if (series.expense.size >= 2) series.expense[series.expense.size - 2] else 0.0
 
     val incDiff = monthlyPemasukan - prevMonthPemasukan
     val expDiff = monthlyPengeluaran - prevMonthPengeluaran
 
     // Determine trend for motivational text
     val nets = series.income.zip(series.expense) { inc, exp -> inc - exp }
-    val trend = if (nets.size >= 2) {
+    val trend = summary?.trend ?: if (nets.size >= 2) {
         val last = nets.last()
         val prev = nets[nets.size - 2]
         if (last > prev) "Meningkat" else if (last < prev) "Menurun" else "Stabil"
@@ -935,6 +1339,263 @@ fun ChartLegendItem(label: String, color: Color) {
 }
 
 @Composable
+private fun SectionTitle(
+    title: String,
+    subtitle: String,
+    isDark: Boolean,
+    iconColor: Color
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = if (isDark) Color.White else iOSLabelLight
+            )
+            Text(
+                text = subtitle,
+                fontSize = 10.sp,
+                color = if (isDark) iOSSecondaryLabelDark else iOSSecondaryLabelLight,
+                fontWeight = FontWeight.Medium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(iconColor.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = iconColor, modifier = Modifier.size(18.dp))
+        }
+    }
+}
+
+@Composable
+private fun DreamForecastSection(
+    forecastItems: List<DreamForecastItem>,
+    fallbackImpianItems: List<ImpianItem>,
+    isDark: Boolean,
+    onNavigateToImpian: () -> Unit
+) {
+    val items = if (forecastItems.isNotEmpty()) {
+        forecastItems
+    } else {
+        fallbackImpianItems.take(3).map { item ->
+            DreamForecastItem(
+                idImpian = item.idImpian,
+                namaBarang = item.namaBarang,
+                fotoBarang = item.fotoBarang,
+                hargaBarang = item.hargaBarang,
+                deadline = item.deadline,
+                keterangan = item.keterangan,
+                avgSavings = 0.0,
+                reachPercent = item.persentaseProgress ?: 0.0
+            )
+        }
+    }
+
+    if (items.isEmpty()) return
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        SectionTitle(
+            title = "Perkiraan Tabungan",
+            subtitle = "Estimasi pencapaian mengikuti data statistik web",
+            isDark = isDark,
+            iconColor = StitchPrimary
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            items.take(3).forEach { item ->
+                DreamForecastCard(
+                    item = item,
+                    isDark = isDark,
+                    onClick = onNavigateToImpian
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DreamForecastCard(
+    item: DreamForecastItem,
+    isDark: Boolean,
+    onClick: () -> Unit
+) {
+    val progress = (item.reachPercent / 100.0).toFloat().coerceIn(0f, 1f)
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = if (isDark) iOSGroupedBackgroundDark else Color.White)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(KassakuSpacing.cardInner),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(StitchPrimary.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Stars, contentDescription = null, tint = StitchPrimary)
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = item.namaBarang ?: "Impian",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Black,
+                        color = if (isDark) Color.White else iOSLabelLight,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = formatCurrency(item.hargaBarang ?: 0.0),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isDark) iOSSecondaryLabelDark else iOSSecondaryLabelLight,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Text(
+                    text = "${String.format(Locale.US, "%.1f", item.reachPercent)}%",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Black,
+                    color = StitchPrimary
+                )
+            }
+
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(999.dp)),
+                color = StitchPrimary,
+                trackColor = StitchPrimary.copy(alpha = 0.12f)
+            )
+
+            Text(
+                text = "Rata tabungan ${formatCurrency(item.avgSavings)} per bulan",
+                fontSize = 11.sp,
+                color = if (isDark) iOSSecondaryLabelDark else iOSSecondaryLabelLight,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun RecentActivitySection(
+    transactions: List<RiwayatItem>,
+    isDark: Boolean
+) {
+    if (transactions.isEmpty()) return
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        SectionTitle(
+            title = "Aktivitas Terbaru",
+            subtitle = "5 transaksi terbaru seperti halaman statistik web",
+            isDark = isDark,
+            iconColor = StitchPrimary
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = if (isDark) iOSGroupedBackgroundDark else Color.White)
+        ) {
+            Column(
+                modifier = Modifier.padding(KassakuSpacing.cardInner),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                transactions.take(5).forEachIndexed { index, item ->
+                    RecentTransactionRow(item = item, isDark = isDark)
+                    if (index != transactions.take(5).lastIndex) {
+                        HorizontalDivider(color = if (isDark) Color.White.copy(alpha = 0.06f) else Color.Black.copy(alpha = 0.06f))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecentTransactionRow(
+    item: RiwayatItem,
+    isDark: Boolean
+) {
+    val isIncome = item.tipe?.lowercase(Locale.ROOT) == "pemasukan"
+    val tone = if (isIncome) StitchPrimary else StitchAccentRed
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(42.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(tone.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = if (isIncome) Icons.Default.TrendingUp else Icons.Default.TrendingDown,
+                contentDescription = null,
+                tint = tone,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = item.kategori ?: "Tanpa Jenis",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isDark) Color.White else iOSLabelLight,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = item.tanggal ?: item.createdAt ?: "-",
+                fontSize = 11.sp,
+                color = if (isDark) iOSSecondaryLabelDark else iOSSecondaryLabelLight,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Text(
+            text = "${if (isIncome) "+" else "-"}${formatCurrency(item.nominal ?: 0.0)}",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Black,
+            color = tone,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
 fun DreamProjectionSection(
     data: com.example.kassaku.data.remote.model.StatistikData,
     impianItems: List<com.example.kassaku.data.remote.model.ImpianItem>,
@@ -1029,7 +1690,7 @@ fun DreamProjectionCard(
         modifier = modifier
             .clickable(onClick = onClick)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(KassakuSpacing.cardInner)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1218,7 +1879,7 @@ fun BudgetCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
+        Column(modifier = Modifier.padding(KassakuSpacing.cardInnerLarge)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1695,7 +2356,8 @@ fun CashflowChartsSection(
     data: StatistikData,
     selectedPeriod: String,
     onPeriodChange: (String) -> Unit,
-    isDark: Boolean
+    isDark: Boolean,
+    includeCategoryChart: Boolean = false
 ) {
     val resolvedSeries = remember(data, selectedPeriod) {
         resolveCashflowPeriodData(data, selectedPeriod)
@@ -1828,6 +2490,15 @@ fun CashflowChartsSection(
             lineHeight = 16.sp,
             color = if (isDark) iOSSecondaryLabelDark else iOSSecondaryLabelLight
         )
+
+        if (includeCategoryChart) {
+            Spacer(modifier = Modifier.height(KassakuSpacing.sectionGap))
+            CategoryChartSection(
+                data = data,
+                selectedPeriod = selectedPeriod,
+                isDark = isDark
+            )
+        }
     }
 }
 
@@ -1837,36 +2508,31 @@ private fun CashflowSummaryCards(
     periodLabel: String,
     isDark: Boolean
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(KassakuSpacing.elementGap + 4.dp)) {
         Text(
             text = "Ringkasan $periodLabel",
-            fontSize = 12.sp,
+            fontSize = 13.sp,
             fontWeight = FontWeight.Black,
             color = if (isDark) iOSSecondaryLabelDark else iOSSecondaryLabelLight,
             letterSpacing = 1.sp
         )
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            SummaryMetricCard(
-                title = "Total Pemasukan",
-                subtitle = "Akumulasi periode aktif",
-                value = formatCurrency(series.totalIncome),
-                toneColor = StitchPrimary,
-                isDark = isDark,
-                modifier = Modifier.weight(1f)
-            )
-            SummaryMetricCard(
-                title = "Total Pengeluaran",
-                subtitle = "Pengeluaran periode aktif",
-                value = formatCurrency(series.totalExpense),
-                toneColor = StitchAccentRed,
-                isDark = isDark,
-                modifier = Modifier.weight(1f)
-            )
-        }
+        SummaryMetricCard(
+            title = "Total Pemasukan",
+            subtitle = "Akumulasi periode aktif",
+            value = formatCurrency(series.totalIncome),
+            toneColor = StitchPrimary,
+            isDark = isDark,
+            modifier = Modifier.fillMaxWidth()
+        )
+        SummaryMetricCard(
+            title = "Total Pengeluaran",
+            subtitle = "Pengeluaran periode aktif",
+            value = formatCurrency(series.totalExpense),
+            toneColor = StitchAccentRed,
+            isDark = isDark,
+            modifier = Modifier.fillMaxWidth()
+        )
 
         SummaryMetricCard(
             title = "Net Cashflow",
@@ -1893,35 +2559,66 @@ private fun SummaryMetricCard(
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(22.dp),
+        modifier = modifier
+            .shadow(
+                elevation = 6.dp,
+                shape = RoundedCornerShape(24.dp),
+                spotColor = toneColor.copy(alpha = 0.2f)
+            ),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isDark) iOSGroupedBackgroundDark else Color.White
+        ),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            toneColor.copy(alpha = if (isDark) 0.28f else 0.18f)
         )
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(KassakuSpacing.cardInner)
         ) {
-            Text(
-                text = title.uppercase(Locale.getDefault()),
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 1.sp,
-                color = if (isDark) iOSSecondaryLabelDark else iOSSecondaryLabelLight
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .height(72.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(toneColor, toneColor.copy(alpha = 0.45f))
+                        )
+                    )
             )
-            Text(
-                text = value,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = toneColor
-            )
-            Text(
-                text = subtitle,
-                fontSize = 11.sp,
-                lineHeight = 15.sp,
-                color = if (isDark) iOSSecondaryLabelDark else iOSSecondaryLabelLight
-            )
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = title.uppercase(Locale.getDefault()),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 1.2.sp,
+                    color = if (isDark) iOSSecondaryLabelDark else iOSSecondaryLabelLight
+                )
+                Text(
+                    text = value,
+                    fontSize = if (value.length > 20) 18.sp else if (value.length > 16) 21.sp else 24.sp,
+                    lineHeight = 28.sp,
+                    fontWeight = FontWeight.Black,
+                    color = toneColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    letterSpacing = 0.sp
+                )
+                Text(
+                    text = subtitle,
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp,
+                    color = if (isDark) iOSSecondaryLabelDark else iOSSecondaryLabelLight
+                )
+            }
         }
     }
 }
@@ -1995,7 +2692,7 @@ fun CashflowTrendChart(
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = surfaceColor)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(KassakuSpacing.cardInner)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -2178,7 +2875,7 @@ fun NetBarChart(
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = surfaceColor)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(KassakuSpacing.cardInner)) {
             Text(
                 text = "Net Arus Kas",
                 fontSize = 13.sp,
@@ -2267,7 +2964,7 @@ private fun CashflowInsightCard(
         colors = CardDefaults.cardColors(containerColor = surfaceColor),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(KassakuSpacing.cardInner)) {
             Text(
                 text = "Insight ${resolved.periodLabel}",
                 fontSize = 13.sp,
