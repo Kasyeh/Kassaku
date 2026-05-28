@@ -42,7 +42,7 @@ fun ReminderSettingsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val isDark = true // Matching the dark premium look from image
 
-    val backgroundColor = StitchBackgroundDark
+    val backgroundColor = if (isDark) iOSBackgroundDark else iOSBackgroundLight
     val surfaceColor = StitchSurfaceDark
     val textPrimary = Color.White
     val textSecondary = Color(0xFF94A3B8)

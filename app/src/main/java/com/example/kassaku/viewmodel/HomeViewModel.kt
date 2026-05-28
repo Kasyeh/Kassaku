@@ -400,6 +400,7 @@ open class HomeViewModel(
 
     fun tambahImpian(userId: Int, namaBarang: String, hargaBarang: Long, deadline: String, keterangan: String?, fotoPart: okhttp3.MultipartBody.Part?) {
         viewModelScope.launch {
+            _tambahImpianResult.value = TambahImpianResult.Loading
             val result = impianRepository.tambahImpian(userId, namaBarang, hargaBarang, deadline, keterangan, fotoPart)
             result.fold(
                 onSuccess = { message ->
@@ -870,6 +871,36 @@ open class HomeViewModel(
 
     fun resetAvatarUpdateResult() {
         _avatarUpdateResult.value = AvatarUpdateResult.Idle
+    }
+
+    // ===============================
+    // FEEDBACK SUBMISSION
+    // ===============================
+    private val _feedbackResult = MutableStateFlow<FeedbackResult>(FeedbackResult.Idle)
+    val feedbackResult: StateFlow<FeedbackResult> = _feedbackResult.asStateFlow()
+
+    fun sendFeedback(subjek: String, pesan: String, rating: Int? = null) {
+        viewModelScope.launch {
+            _feedbackResult.value = FeedbackResult.Loading
+            try {
+                val response = ApiClient.api.sendFeedback(subjek, pesan, rating)
+                if (response.isSuccessful && response.body()?.success == true) {
+                    _feedbackResult.value = FeedbackResult.Success(
+                        response.body()?.message ?: "Umpan balik berhasil dikirim"
+                    )
+                } else {
+                    val rawError = response.errorBody()?.string().orEmpty()
+                    val message = parseApiErrorMessage(rawError) ?: "Gagal mengirim umpan balik"
+                    _feedbackResult.value = FeedbackResult.Error(message)
+                }
+            } catch (e: Exception) {
+                _feedbackResult.value = FeedbackResult.Error(e.message ?: "Terjadi kesalahan koneksi")
+            }
+        }
+    }
+
+    fun resetFeedbackResult() {
+        _feedbackResult.value = FeedbackResult.Idle
     }
 }
 

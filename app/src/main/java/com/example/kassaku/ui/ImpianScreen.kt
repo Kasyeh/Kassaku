@@ -43,9 +43,12 @@ import coil.compose.AsyncImage
 import com.example.kassaku.data.remote.model.ImpianItem
 import com.example.kassaku.ui.theme.KassakuSpacing
 import com.example.kassaku.ui.theme.*
+import com.example.kassaku.ui.components.EmptyStateLottie
 import com.example.kassaku.ui.components.LogoutConfirmationDialog
 import com.example.kassaku.ui.components.form.SetorImpianFormSheet
 import com.example.kassaku.ui.components.form.SetorImpianFormState
+import com.example.kassaku.ui.components.form.TambahImpianFormSheet
+import com.example.kassaku.ui.components.form.TambahImpianFormState
 import com.example.kassaku.viewmodel.HomeViewModel
 import com.example.kassaku.viewmodel.ImpianUiState
 import com.example.kassaku.viewmodel.TambahImpianResult
@@ -82,12 +85,14 @@ fun ImpianScreen(
     var impianToSetor by remember { mutableStateOf<ImpianItem?>(null) }
     var showSetorSheet by remember { mutableStateOf(false) }
     var setorFormState by remember { mutableStateOf<SetorImpianFormState>(SetorImpianFormState.Idle) }
+    var showTambahSheet by remember { mutableStateOf(false) }
+    var tambahFormState by remember { mutableStateOf<TambahImpianFormState>(TambahImpianFormState.Idle) }
 
     val balanceData by homeViewModel.balanceData.collectAsStateWithLifecycle()
     val currencyCode = balanceData?.currency ?: "IDR"
 
     // Colors
-    val backgroundColor = if (isDark) StitchBackgroundDark else StitchBackgroundLight
+    val backgroundColor = if (isDark) iOSBackgroundDark else iOSBackgroundLight
     val surfaceColor = if (isDark) StitchSurfaceDark else StitchSurfaceLight
     val textPrimary = if (isDark) Color.White else StitchTextPrimary
 
@@ -103,10 +108,16 @@ fun ImpianScreen(
                     is TambahImpianResult.Success -> {
                         Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
                         homeViewModel.resetTambahImpianResult()
+                        tambahFormState = TambahImpianFormState.Success
+                        showTambahSheet = false
                     }
                     is TambahImpianResult.Error -> {
                         Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
                         homeViewModel.resetTambahImpianResult()
+                        tambahFormState = TambahImpianFormState.Error(result.message)
+                    }
+                    is TambahImpianResult.Loading -> {
+                        tambahFormState = TambahImpianFormState.Submitting
                     }
                     else -> {}
                 }
@@ -189,7 +200,10 @@ fun ImpianScreen(
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(KassakuSpacing.elementGap)) {
                         IconButton(
-                            onClick = { showTambahDialog = true },
+                            onClick = { 
+                                showTambahSheet = true 
+                                tambahFormState = TambahImpianFormState.Idle
+                            },
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
@@ -219,7 +233,11 @@ fun ImpianScreen(
 
                 is ImpianUiState.Success -> {
                     if (state.impianItems.isEmpty()) {
-                        EmptyImpianView()
+                        EmptyStateLottie(
+                            message = "Belum ada impian",
+                            subtitle = "Mulai buat impian pertamamu!",
+                            isDark = isDark
+                        )
                     } else {
                         LazyColumn(
                             contentPadding = PaddingValues(
@@ -280,20 +298,22 @@ fun ImpianScreen(
             )
         }
         
-        // Dialog tambah impian
-        if (showTambahDialog) {
-            TambahImpianDialog(
-                onDismissRequest = { showTambahDialog = false },
-                onConfirm = { namaBarang, hargaBarang, deadline, keterangan, imageUri ->
-                    showTambahDialog = false
-                    val fotoBarang = imageUri?.let { uri ->
-                        createMultipartFromUri(context, uri, "foto_barang")
-                    }
-                    homeViewModel.tambahImpian(userId, namaBarang, hargaBarang, deadline, keterangan, fotoBarang)
-                },
-                currencyCode = homeViewModel.balanceData.value?.currency ?: "IDR"
-            )
-        }
+        // Sheet tambah impian
+        TambahImpianFormSheet(
+            isVisible = showTambahSheet,
+            formState = tambahFormState,
+            onDismiss = {
+                showTambahSheet = false
+                tambahFormState = TambahImpianFormState.Idle
+            },
+            onSubmit = { namaBarang, hargaBarang, deadline, keterangan, imageUri ->
+                val fotoBarang = imageUri?.let { uri ->
+                    createMultipartFromUri(context, uri, "foto_barang")
+                }
+                homeViewModel.tambahImpian(userId, namaBarang, hargaBarang, deadline, keterangan, fotoBarang)
+            },
+            currencyCode = homeViewModel.balanceData.value?.currency ?: "IDR"
+        )
 
         // Dialog hapus impian
         if (showHapusDialog) {
@@ -527,34 +547,19 @@ fun ImpianItemRow(
 
 @Composable
 fun EmptyImpianView() {
+    val isDark = com.example.kassaku.ui.theme.LocalIsDark.current
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(KassakuSpacing.cardGap)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Paid,
-                contentDescription = null,
-                modifier = Modifier.size(80.dp),
-                tint = StitchTextSecondary.copy(alpha = 0.5f)
-            )
-            Text(
-                text = "Belum ada tabungan impian",
-                style = MaterialTheme.typography.titleMedium,
-                color = StitchTextSecondary
-            )
-            Text(
-                text = "Mulai menabung untuk mewujudkan impianmu!",
-                style = MaterialTheme.typography.bodyMedium,
-                color = StitchTextSecondary.copy(alpha = 0.7f),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
-        }
+        EmptyStateLottie(
+            message = "Belum ada tabungan impian",
+            subtitle = "Mulai menabung untuk mewujudkan impianmu!",
+            isDark = isDark
+        )
     }
 }
+
 
 @Composable
 fun ImpianDetailDialog(item: ImpianItem, onDismissRequest: () -> Unit, currencyCode: String) {

@@ -13,7 +13,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.rounded.*
@@ -56,6 +56,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import coil.compose.AsyncImage
 import com.example.kassaku.viewmodel.AvatarUpdateResult
+import com.example.kassaku.viewmodel.FeedbackResult
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -69,7 +70,7 @@ fun ProfileScreen(
 ) {
     val context = LocalContext.current
     val isDark = LocalIsDark.current
-    val backgroundColor = if (isDark) StitchBackgroundDark else StitchBackgroundLight
+    val backgroundColor = if (isDark) iOSBackgroundDark else iOSBackgroundLight
     val textPrimary = if (isDark) Color.White else StitchTextPrimary
     val surfaceColor = if (isDark) StitchSurfaceDark else StitchSurfaceLight
     val textSecondary = if (isDark) Color(0xFF94A3B8) else StitchTextSecondary
@@ -87,6 +88,9 @@ fun ProfileScreen(
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showPasswordDialog by remember { mutableStateOf(false) }
     var showEmailEditDialog by remember { mutableStateOf(false) }
+    var showFeedbackDialog by remember { mutableStateOf(false) }
+
+    val feedbackResult by homeViewModel.feedbackResult.collectAsStateWithLifecycle()
     
     val snackbarHostState = remember { SnackbarHostState() }
     
@@ -162,6 +166,21 @@ fun ProfileScreen(
             is EmailUpdateResult.Error -> {
                 Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
                 homeViewModel.resetEmailUpdateResult()
+            }
+            else -> {}
+        }
+    }
+
+    LaunchedEffect(feedbackResult) {
+        when (val result = feedbackResult) {
+            is FeedbackResult.Success -> {
+                Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
+                homeViewModel.resetFeedbackResult()
+                showFeedbackDialog = false
+            }
+            is FeedbackResult.Error -> {
+                Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
+                homeViewModel.resetFeedbackResult()
             }
             else -> {}
         }
@@ -248,8 +267,15 @@ fun ProfileScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     if (avatarUrl != null) {
+                                        val fixedUrl = avatarUrl
+                                            .replace("http://localhost:8000", "http://10.0.2.2:8000")
+                                            .replace("http://127.0.0.1:8000", "http://10.0.2.2:8000")
+                                            .replace("http://localhost/", "http://10.0.2.2:8000/")
+                                            .replace("http://127.0.0.1/", "http://10.0.2.2:8000/")
+                                            .replace("http://localhost", "http://10.0.2.2:8000")
+                                            
                                         AsyncImage(
-                                            model = avatarUrl,
+                                            model = fixedUrl,
                                             contentDescription = "Profile Avatar",
                                             modifier = Modifier.fillMaxSize(),
                                             contentScale = ContentScale.Crop
@@ -438,6 +464,21 @@ fun ProfileScreen(
                     }
                 }
 
+                // Feedback & Support
+                item {
+                    SettingGroupTitle(title = "Bantuan & Masukan", textPrimary = textPrimary)
+                    SettingGroupCard(isDark = isDark, surfaceColor = surfaceColor) {
+                        SettingItemRow(
+                            icon = Icons.Rounded.RateReview,
+                            iconColor = Color(0xFF8B5CF6),
+                            title = "Kirim Masukan",
+                            subtitle = "Bantu kami menjadi lebih baik",
+                            onClick = { showFeedbackDialog = true },
+                            isDark = isDark
+                        )
+                    }
+                }
+
                 // Destructive Actions
                 item {
                     Spacer(modifier = Modifier.height(16.dp))
@@ -451,7 +492,7 @@ fun ProfileScreen(
                         )
                         HorizontalDivider(color = if (isDark) Color(0xFF334155) else Color(0xFFF1F5F9))
                         SettingItemRowDestructive(
-                            icon = Icons.Rounded.Logout,
+                            icon = Icons.AutoMirrored.Rounded.Logout,
                             title = "Keluar dari Akun",
                             onClick = { showLogoutDialog = true },
                             isDark = isDark,
@@ -663,6 +704,233 @@ fun ProfileScreen(
                 },
                 dismissButton = {
                     TextButton(onClick = { showCurrencySheet = false }) { Text("Batal") }
+                }
+            )
+        }
+
+        // --- Feedback Dialog --- //
+        if (showFeedbackDialog) {
+            var feedbackSubjek by remember { mutableStateOf("") }
+            var feedbackPesan by remember { mutableStateOf("") }
+            var feedbackRating by remember { mutableIntStateOf(0) }
+            val isLoading = feedbackResult is FeedbackResult.Loading
+            val canSubmit = feedbackSubjek.isNotBlank() && feedbackPesan.isNotBlank() && !isLoading
+
+            AlertDialog(
+                onDismissRequest = {
+                    if (!isLoading) showFeedbackDialog = false
+                },
+                shape = RoundedCornerShape(24.dp),
+                containerColor = if (isDark) StitchSurfaceDark else StitchSurfaceLight,
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF8B5CF6).copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Rounded.RateReview,
+                                contentDescription = null,
+                                tint = Color(0xFF8B5CF6),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            "Kirim Masukan",
+                            fontWeight = FontWeight.Bold,
+                            color = if (isDark) Color.White else StitchTextPrimary
+                        )
+                    }
+                },
+                text = {
+                    Column {
+                        // Rating Section
+                        Text(
+                            text = "Seberapa puas Anda?",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isDark) Color(0xFF94A3B8) else StitchTextSecondary
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            for (i in 1..5) {
+                                IconButton(
+                                    onClick = { feedbackRating = if (feedbackRating == i) 0 else i },
+                                    modifier = Modifier.size(44.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (i <= feedbackRating) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                                        contentDescription = "Bintang $i",
+                                        tint = if (i <= feedbackRating) Color(0xFFF59E0B) else {
+                                            if (isDark) Color(0xFF475569) else Color(0xFFCBD5E1)
+                                        },
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                }
+                            }
+                        }
+                        if (feedbackRating > 0) {
+                            Text(
+                                text = when (feedbackRating) {
+                                    1 -> "Sangat Tidak Puas"
+                                    2 -> "Kurang Puas"
+                                    3 -> "Cukup Baik"
+                                    4 -> "Puas"
+                                    5 -> "Sangat Puas"
+                                    else -> ""
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFFF59E0B),
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+
+                        Spacer(Modifier.height(16.dp))
+
+                        // Subject Field (Radio Chips to match Web UX)
+                        Text(
+                            text = "Subjek Masukan",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isDark) Color(0xFF94A3B8) else StitchTextSecondary
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        val subjectOptions = listOf("Saran Fitur", "Laporan Bug", "Pertanyaan", "Lainnya")
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                subjectOptions.take(2).forEach { option ->
+                                    val isSelected = feedbackSubjek == option
+                                    val chipBg = if (isSelected) {
+                                        when (option) {
+                                            "Saran Fitur" -> StitchPrimary
+                                            "Laporan Bug" -> StitchNegative
+                                            "Pertanyaan" -> Color(0xFF0EA5E9)
+                                            else -> Color(0xFF475569)
+                                        }
+                                    } else {
+                                        if (isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.05f)
+                                    }
+                                    val contentColor = if (isSelected) Color.White else (if (isDark) Color(0xFF94A3B8) else StitchTextSecondary)
+                                    
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(chipBg)
+                                            .clickable { feedbackSubjek = option }
+                                            .padding(vertical = 12.dp, horizontal = 12.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = option,
+                                            color = contentColor,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp
+                                        )
+                                    }
+                                }
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                subjectOptions.drop(2).take(2).forEach { option ->
+                                    val isSelected = feedbackSubjek == option
+                                    val chipBg = if (isSelected) {
+                                        when (option) {
+                                            "Saran Fitur" -> StitchPrimary
+                                            "Laporan Bug" -> StitchNegative
+                                            "Pertanyaan" -> Color(0xFF0EA5E9)
+                                            else -> Color(0xFF475569)
+                                        }
+                                    } else {
+                                        if (isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.05f)
+                                    }
+                                    val contentColor = if (isSelected) Color.White else (if (isDark) Color(0xFF94A3B8) else StitchTextSecondary)
+                                    
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(chipBg)
+                                            .clickable { feedbackSubjek = option }
+                                            .padding(vertical = 12.dp, horizontal = 12.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = option,
+                                            color = contentColor,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(12.dp))
+
+                        // Message Field
+                        OutlinedTextField(
+                            value = feedbackPesan,
+                            onValueChange = { feedbackPesan = it },
+                            label = { Text("Pesan Masukan") },
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 120.dp),
+                            maxLines = 6,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color(0xFF8B5CF6),
+                                cursorColor = Color(0xFF8B5CF6),
+                                focusedLabelColor = Color(0xFF8B5CF6)
+                            ),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            homeViewModel.sendFeedback(
+                                subjek = feedbackSubjek.trim(),
+                                pesan = feedbackPesan.trim(),
+                                rating = if (feedbackRating > 0) feedbackRating else null
+                            )
+                        },
+                        enabled = canSubmit,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6)),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        if (isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = Color.White
+                            )
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        Text(if (isLoading) "Mengirim..." else "Kirim Masukan")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { showFeedbackDialog = false },
+                        enabled = !isLoading
+                    ) {
+                        Text("Batal")
+                    }
                 }
             )
         }

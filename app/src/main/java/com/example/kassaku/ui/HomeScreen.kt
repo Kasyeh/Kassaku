@@ -45,7 +45,6 @@ import androidx.compose.material.icons.rounded.ShoppingBag
 import androidx.compose.material.icons.rounded.SmartToy
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.Stars
-import androidx.compose.material.icons.rounded.TrendingUp
 import androidx.compose.material.icons.rounded.Work
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
@@ -115,6 +114,7 @@ import com.example.kassaku.ui.components.ConfettiEffect
 import com.example.kassaku.utils.formatDisplayDate
 import com.example.kassaku.utils.formatDisplayTime
 import com.example.kassaku.ui.components.SmartNudgeCard
+import com.example.kassaku.ui.components.EmptyStateLottie
 import com.example.kassaku.utils.BalanceVisibilityPreferences
 import com.example.kassaku.utils.isEmulator
 
@@ -404,6 +404,15 @@ fun HomeScreen(
                                 .size(48.dp)
                                 .clip(CircleShape)
                                 .background(Brush.linearGradient(listOf(StitchPrimary, Color(0xFF60A5FA))))
+                                .clickable {
+                                    navController.navigate(BottomNavItem.Profil.route) {
+                                        popUpTo(com.example.kassaku.AppDestinations.HOME_ROUTE) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
                                 .padding(2.dp)
                         ) {
                             Box(
@@ -561,7 +570,7 @@ fun HomeScreen(
                     }
                 }
 
-                // Tampilkan Smart Nudges jika ada
+                // Smart Space: Nudges
                 if (smartNudges.isNotEmpty()) {
                     items(smartNudges.size) { index ->
                         SmartNudgeCard(
@@ -571,18 +580,14 @@ fun HomeScreen(
                                 when (actionType) {
                                     "NAVIGATE_IMPIAN", "NAVIGATE_TABUNGAN" -> {
                                         navController.navigate(com.example.kassaku.ui.components.BottomNavItem.Impian.route) {
-                                            popUpTo(com.example.kassaku.AppDestinations.HOME_ROUTE) {
-                                                saveState = true
-                                            }
+                                            popUpTo(com.example.kassaku.AppDestinations.HOME_ROUTE) { saveState = true }
                                             launchSingleTop = true
                                             restoreState = true
                                         }
                                     }
                                     "NAVIGATE_RIWAYAT" -> {
                                         navController.navigate(com.example.kassaku.ui.components.BottomNavItem.Riwayat.route) {
-                                            popUpTo(com.example.kassaku.AppDestinations.HOME_ROUTE) {
-                                                saveState = true
-                                            }
+                                            popUpTo(com.example.kassaku.AppDestinations.HOME_ROUTE) { saveState = true }
                                             launchSingleTop = true
                                             restoreState = true
                                         }
@@ -594,7 +599,7 @@ fun HomeScreen(
                     }
                 }
 
-                // Tampilkan Motivasi Slider
+                // Motivation Carousel
                 val data = statistikData
                 if (data != null && !data.motivasi.isNullOrEmpty()) {
                     item {
@@ -606,7 +611,7 @@ fun HomeScreen(
                 }
 
                 item {
-                    HomeSectionTitle(title = "Jelajahi Fitur")
+                    HomeSectionTitle(title = "Sorotan Hari Ini")
                 }
                 item {
                     HomeExploreRow(
@@ -622,25 +627,36 @@ fun HomeScreen(
                         }
                     )
                 }
-                item {
-                    HomeSectionTitle(title = "Ringkasan Keuangan")
-                }
+                // Bento Grid: Insight & Trend Chart Side-by-Side
                 item {
                     val income = balanceData?.pemasukan?.toDoubleOrNull() ?: 0.0
                     val expense = balanceData?.pengeluaran?.toDoubleOrNull() ?: 0.0
                     AnimatedVisibility(visible = isVisible) {
-                        FinancialInsightCard(statistikData = statistikData, currentMonthExpense = expense, currentMonthIncome = income)
-                    }
-                }
-                item {
-                    AnimatedVisibility(visible = isVisible) {
-                        MiniTrendChart(statistikData = statistikData, onChartClick = { navController.navigate(BottomNavItem.Statistik.route) {
-                                            popUpTo(com.example.kassaku.AppDestinations.HOME_ROUTE) {
-                                                saveState = true
-                                            }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        } })
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(180.dp), // Fixed height to prevent stretching and overflow
+                            horizontalArrangement = Arrangement.spacedBy(16.dp) // Increased gap
+                        ) {
+                            FinancialInsightCard(
+                                statistikData = statistikData, 
+                                currentMonthExpense = expense, 
+                                currentMonthIncome = income,
+                                modifier = Modifier.weight(1f).fillMaxHeight()
+                            )
+                            
+                            MiniTrendChart(
+                                statistikData = statistikData, 
+                                onChartClick = { 
+                                    navController.navigate(BottomNavItem.Statistik.route) {
+                                        popUpTo(com.example.kassaku.AppDestinations.HOME_ROUTE) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    } 
+                                },
+                                modifier = Modifier.weight(1f).fillMaxHeight()
+                            )
+                        }
                     }
                 }
                 item {
@@ -668,7 +684,7 @@ fun HomeScreen(
                     is RiwayatUiState.Loading, is RiwayatUiState.Idle -> { item { SkeletonTransactionList(itemCount = 3, isDarkTheme = isDark) } }
                     is RiwayatUiState.Success -> {
                         if (transactions.isEmpty()) {
-                            item { Column(modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) { Icon(Icons.Rounded.ReceiptLong, null, tint = secondaryLabelColor.copy(alpha = 0.5f), modifier = Modifier.size(64.dp)); Spacer(modifier = Modifier.height(16.dp)); Text("Belum ada catatan", fontWeight = FontWeight.Medium, color = labelColor) } }
+                            item { EmptyStateLottie(message = "Belum ada catatan", subtitle = "Catat transaksi pertamamu!", isDark = isDark, modifier = Modifier.padding(vertical = 48.dp)) }
                         } else {
                             itemsIndexed(transactions) { _, transaction -> TransactionItemCard(transaction = transaction, isDark = isDark, currencyCode = balanceData?.currency ?: "IDR", currencyFormat = balanceData?.currencyFormat ?: "standard") }
                         }

@@ -194,9 +194,12 @@ fun RegisterScreen(
                                     colors = TextFieldDefaults.colors(
                                         focusedContainerColor = if(isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFF8FAFC),
                                         unfocusedContainerColor = if(isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFF8FAFC),
+                                        errorContainerColor = if(isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFF8FAFC),
                                         focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
+                                        errorIndicatorColor = Color.Transparent,
                                         cursorColor = primaryColor,
-                                        focusedTextColor = textPrimary, unfocusedTextColor = textPrimary
+                                        focusedTextColor = textPrimary, unfocusedTextColor = textPrimary,
+                                        errorTextColor = textPrimary
                                     ),
                                     singleLine = true,
                                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
@@ -225,9 +228,12 @@ fun RegisterScreen(
                                     colors = TextFieldDefaults.colors(
                                         focusedContainerColor = if(isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFF8FAFC),
                                         unfocusedContainerColor = if(isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFF8FAFC),
+                                        errorContainerColor = if(isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFF8FAFC),
                                         focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
+                                        errorIndicatorColor = Color.Transparent,
                                         cursorColor = primaryColor,
-                                        focusedTextColor = textPrimary, unfocusedTextColor = textPrimary
+                                        focusedTextColor = textPrimary, unfocusedTextColor = textPrimary,
+                                        errorTextColor = textPrimary
                                     ),
                                     singleLine = true,
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
@@ -261,9 +267,12 @@ fun RegisterScreen(
                                     colors = TextFieldDefaults.colors(
                                         focusedContainerColor = if(isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFF8FAFC),
                                         unfocusedContainerColor = if(isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFF8FAFC),
+                                        errorContainerColor = if(isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFF8FAFC),
                                         focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
+                                        errorIndicatorColor = Color.Transparent,
                                         cursorColor = primaryColor,
-                                        focusedTextColor = textPrimary, unfocusedTextColor = textPrimary
+                                        focusedTextColor = textPrimary, unfocusedTextColor = textPrimary,
+                                        errorTextColor = textPrimary
                                     ),
                                     singleLine = true,
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Done),

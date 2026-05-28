@@ -53,41 +53,25 @@ fun MiniTrendChart(
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(KassakuSpacing.cardInnerLarge)
+                .fillMaxSize()
+                .padding(16.dp)
         ) {
             // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Tren 6 Bulan",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Black,
-                    color = labelColor,
-                    letterSpacing = 0.sp
-                )
-                
-                // Legend
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    LegendDot(color = StitchPrimary, label = "Masuk")
-                    LegendDot(color = StitchAccentRed, label = "Keluar")
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(KassakuSpacing.elementGap + 4.dp))
+            Text(
+                text = "Tren 6 Bulan",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Black,
+                color = labelColor,
+                letterSpacing = 0.sp
+            )
+            Spacer(modifier = Modifier.height(12.dp))
             
             // Mini Chart
             if (statistikData != null && statistikData.labels.isNotEmpty()) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(80.dp),
+                        .weight(1f),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.Bottom
                 ) {
@@ -145,15 +129,6 @@ fun MiniTrendChart(
                                         )
                                 )
                             }
-                            
-                            Spacer(modifier = Modifier.height(6.dp))
-                            
-                            Text(
-                                text = label.take(3), // Abbreviated month
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = secondaryLabelColor
-                            )
                         }
                     }
                 }
@@ -161,27 +136,16 @@ fun MiniTrendChart(
                 // Empty state
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(80.dp),
+                        .fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Belum ada data statistik",
+                        text = "Belum ada data",
                         style = MaterialTheme.typography.bodySmall,
                         color = secondaryLabelColor
                     )
                 }
             }
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            Text(
-                text = "Lihat detail statistik",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = StitchPrimary,
-                modifier = Modifier.align(Alignment.End)
-            )
         }
     }
 }

@@ -267,6 +267,14 @@ interface ApiService {
 
     @GET("categories")
     suspend fun getCategories(): Response<CategoryResponse>
+
+    @FormUrlEncoded
+    @POST("feedback")
+    suspend fun sendFeedback(
+        @Field("subjek") subjek: String,
+        @Field("pesan") pesan: String,
+        @Field("rating") rating: Int? = null
+    ): Response<FeedbackResponse>
 }
 
 // --- API CLIENT OBJECT ---

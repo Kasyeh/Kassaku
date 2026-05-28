@@ -8,6 +8,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -255,9 +256,8 @@ fun HeroTotalBalanceCard(
                             fontWeight = FontWeight.Black,
                             brush = amountGradient
                         ),
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().basicMarquee(),
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
                         softWrap = false
                     )
                 }
@@ -346,9 +346,8 @@ private fun HeroAnimatedBalanceText(
             brush = gradient,
             letterSpacing = 0.sp
         ),
-        modifier = modifier,
+        modifier = modifier.basicMarquee(),
         maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
         softWrap = false
     )
 }

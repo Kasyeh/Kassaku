@@ -5,9 +5,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.TrendingDown
-import androidx.compose.material.icons.rounded.TrendingFlat
-import androidx.compose.material.icons.rounded.TrendingUp
+import androidx.compose.material.icons.automirrored.rounded.TrendingDown
+import androidx.compose.material.icons.automirrored.rounded.TrendingFlat
+import androidx.compose.material.icons.automirrored.rounded.TrendingUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -56,11 +56,12 @@ fun FinancialInsightCard(
         border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(KassakuSpacing.cardInnerLarge),
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
+            horizontalAlignment = Alignment.Start
         ) {
             // Trend Icon
             Box(
@@ -80,9 +81,9 @@ fun FinancialInsightCard(
                 )
             }
             
-            Spacer(modifier = Modifier.width(KassakuSpacing.elementGap + 4.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             
-            Column(modifier = Modifier.weight(1f)) {
+            Column {
                 Text(
                     text = insight.title,
                     style = MaterialTheme.typography.titleSmall,
@@ -93,10 +94,12 @@ fun FinancialInsightCard(
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = insight.description,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = secondaryLabelColor,
-                    lineHeight = 20.sp,
-                    letterSpacing = 0.sp
+                    lineHeight = 16.sp,
+                    letterSpacing = 0.sp,
+                    maxLines = 2,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
             }
         }
@@ -119,7 +122,7 @@ private fun calculateInsight(
         return InsightResult(
             title = "Mulai Catat Keuanganmu",
             description = "Catat uang masuk dan keluar untuk melihat ringkasan keuangan di sini.",
-            icon = Icons.Rounded.TrendingFlat,
+            icon = Icons.AutoMirrored.Rounded.TrendingFlat,
             iconColor = TrendNeutral
         )
     }
@@ -146,7 +149,7 @@ private fun calculateInsight(
         savingsRate >= 30 -> InsightResult(
             title = "Tabungan Bagus",
             description = "Kamu menabung ${savingsRate}% dari pemasukan bulan ini. Pertahankan!",
-            icon = Icons.Rounded.TrendingUp,
+            icon = Icons.AutoMirrored.Rounded.TrendingUp,
             iconColor = TrendPositive
         )
         
@@ -154,7 +157,7 @@ private fun calculateInsight(
         expenseChange < -10 -> InsightResult(
             title = "Belanja Menurun",
             description = "Belanja bulan ini ${kotlin.math.abs(expenseChange)}% lebih rendah dari bulan lalu. Bagus!",
-            icon = Icons.Rounded.TrendingDown,
+            icon = Icons.AutoMirrored.Rounded.TrendingDown,
             iconColor = TrendPositive
         )
         
@@ -162,7 +165,7 @@ private fun calculateInsight(
         expenseChange > 20 -> InsightResult(
             title = "Belanja Meningkat",
             description = "Belanja naik ${expenseChange}% dibanding bulan lalu. Pantau terus ya.",
-            icon = Icons.Rounded.TrendingUp,
+            icon = Icons.AutoMirrored.Rounded.TrendingUp,
             iconColor = TrendNegative
         )
         
@@ -170,7 +173,7 @@ private fun calculateInsight(
         savingsRate in 10..29 -> InsightResult(
             title = "Keuangan Stabil",
             description = "Kamu menabung ${savingsRate}% dari pemasukan. Tetap konsisten!",
-            icon = Icons.Rounded.TrendingFlat,
+            icon = Icons.AutoMirrored.Rounded.TrendingFlat,
             iconColor = StitchPrimary
         )
         
@@ -178,7 +181,7 @@ private fun calculateInsight(
         else -> InsightResult(
             title = "Pantau Terus",
             description = "Cek statistik lengkap untuk analisis lebih detail.",
-            icon = Icons.Rounded.TrendingFlat,
+            icon = Icons.AutoMirrored.Rounded.TrendingFlat,
             iconColor = TrendNeutral
         )
     }

@@ -19,6 +19,7 @@ sealed class TambahImpianResult {
     data class Success(val message: String) : TambahImpianResult()
     data class Error(val message: String) : TambahImpianResult()
     object Idle : TambahImpianResult()
+    object Loading : TambahImpianResult()
 }
 
 sealed class TargetPengeluaranResult {
@@ -72,4 +73,11 @@ sealed class NotificationUiState {
     object Loading : NotificationUiState()
     data class Success(val items: List<NotificationInboxItem>) : NotificationUiState()
     data class Error(val message: String) : NotificationUiState()
+}
+
+sealed class FeedbackResult {
+    object Idle : FeedbackResult()
+    object Loading : FeedbackResult()
+    data class Success(val message: String) : FeedbackResult()
+    data class Error(val message: String) : FeedbackResult()
 }

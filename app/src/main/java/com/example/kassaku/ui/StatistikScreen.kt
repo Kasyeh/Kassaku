@@ -56,9 +56,9 @@ import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Category
-import androidx.compose.material.icons.filled.TrendingUp
-import androidx.compose.material.icons.filled.TrendingDown
-import androidx.compose.material.icons.filled.TrendingFlat
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
+import androidx.compose.material.icons.automirrored.filled.TrendingFlat
 import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material.icons.filled.WarningAmber
 import com.example.kassaku.data.remote.model.DreamForecastItem
@@ -70,6 +70,7 @@ import com.example.kassaku.data.remote.model.RiwayatItem
 import com.example.kassaku.data.remote.model.StatistikData
 import com.example.kassaku.data.remote.model.StatistikSummaryData
 import com.example.kassaku.ui.components.form.TransactionFormSheet
+import com.example.kassaku.ui.components.form.BudgetFormSheet
 import com.example.kassaku.ui.components.form.TransactionFormState
 import com.example.kassaku.viewmodel.BudgetActionResult
 import com.example.kassaku.viewmodel.PemasukanResult
@@ -90,6 +91,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 
@@ -198,6 +201,9 @@ fun StatistikScreen(
     val textPrimary = if (isDark) iOSLabelDark else iOSLabelLight
 
     val statistikData by homeViewModel.statistikData.collectAsStateWithLifecycle()
+    val balanceData by homeViewModel.balanceData.collectAsStateWithLifecycle()
+    val currencyCode = balanceData?.currency ?: "IDR"
+    val currencyFormat = balanceData?.currencyFormat ?: "standard"
     val impianUiState by homeViewModel.impianUiState.collectAsStateWithLifecycle()
     val budgetActionResult by homeViewModel.budgetActionResult.collectAsStateWithLifecycle()
     val aiInsightState by homeViewModel.aiInsightState.collectAsStateWithLifecycle()
@@ -210,7 +216,8 @@ fun StatistikScreen(
     var pengeluaranFormState by remember { mutableStateOf<TransactionFormState>(TransactionFormState.Idle) }
     var budgetIdToDelete by remember { mutableStateOf<Int?>(null) }
     var selectedCashflowPeriod by remember { mutableStateOf("30d") }
-
+    var selectedTabIndex by remember { mutableStateOf(0) }
+    val tabs = listOf("Ringkasan", "Grafik", "Anggaran")
     LaunchedEffect(homeViewModel, userId) {
         launch {
             homeViewModel.pemasukanResult.collectLatest { result ->
@@ -305,10 +312,34 @@ fun StatistikScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Ringkasan",
+                        text = "Statistik",
                         color = textPrimary,
                         style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold)
                     )
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                TabRow(
+                    selectedTabIndex = selectedTabIndex,
+                    containerColor = Color.Transparent,
+                    contentColor = textPrimary,
+                    divider = {}
+                ) {
+                    tabs.forEachIndexed { index, title ->
+                        Tab(
+                            selected = selectedTabIndex == index,
+                            onClick = { selectedTabIndex = index },
+                            text = { 
+                                Text(
+                                    text = title, 
+                                    fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Medium
+                                ) 
+                            },
+                            selectedContentColor = StitchPrimary,
+                            unselectedContentColor = textPrimary.copy(alpha = 0.6f)
+                        )
+                    }
                 }
             }
             
@@ -320,27 +351,15 @@ fun StatistikScreen(
                 contentPadding = PaddingValues(
                     start = KassakuSpacing.screenHorizontal,
                     end = KassakuSpacing.screenHorizontal,
-                    top = KassakuSpacing.screenVertical,
+                    top = 8.dp, // Reduced top padding since TabRow is above
                     bottom = KassakuSpacing.listBottom
                 ),
                 verticalArrangement = Arrangement.spacedBy(KassakuSpacing.sectionGap)
             ) {
-            item {
-                val data = statistikData
-                if (data != null) {
-                    StatistikOverviewSection(
-                        data = data,
-                        onTambahPemasukan = { showPemasukanSheet = true },
-                        onTambahPengeluaran = { showPengeluaranSheet = true },
-                        isDark = isDark
-                    )
-                } else {
-                    SkeletonChartView(
-                        isDarkTheme = isDark,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
+
+                when (selectedTabIndex) {
+                    0 -> { // Ringkasan
+
 
             item {
                 val data = statistikData
@@ -348,7 +367,9 @@ fun StatistikScreen(
                     MonthlySummarySection(
                         summary = data.summary,
                         fallbackSeries = resolveCashflowPeriodData(data, selectedCashflowPeriod),
-                        isDark = isDark
+                        isDark = isDark,
+                        currencyCode = currencyCode,
+                        currencyFormat = currencyFormat
                     )
                 }
             }
@@ -360,25 +381,71 @@ fun StatistikScreen(
                         data = data,
                         selectedPeriod = selectedCashflowPeriod,
                         aiInsightState = aiInsightState,
-                        isDark = isDark
+                        isDark = isDark,
+                        currencyCode = currencyCode,
+                        currencyFormat = currencyFormat
                     )
                 }
             }
 
-            item {
-                val data = statistikData
-                if (data != null) {
-                    BudgetKategoriSection(
-                        budgets = data.budgetKategori ?: emptyList(),
-                        onTambahClick = { showBudgetDialog = true },
-                        onDeleteClick = { budgetId -> 
-                            budgetIdToDelete = budgetId
-                            showHapusBudgetDialog = true
-                        },
-                        isDark = isDark
-                    )
-                }
-            }
+                        item {
+                            val data = statistikData
+                            if (data != null) {
+                                RecentActivitySection(
+                                    transactions = data.recentTransactions.orEmpty(),
+                                    isDark = isDark,
+                                    currencyCode = currencyCode,
+                                    currencyFormat = currencyFormat
+                                )
+                            }
+                        }
+                    }
+                    1 -> { // Grafik
+                        item {
+                            val data = statistikData
+                            if (data != null) {
+                                CashflowChartsSection(
+                                    data = data,
+                                    isDark = isDark,
+                                    selectedPeriod = selectedCashflowPeriod,
+                                    onPeriodChange = { selectedCashflowPeriod = it },
+                                    includeCategoryChart = true,
+                                    currencyCode = currencyCode,
+                                    currencyFormat = currencyFormat
+                                )
+                            }
+                        }
+            
+                        item {
+                            val data = statistikData
+                            if (data != null) {
+                                ProgressComparisonSection(
+                                    data = data,
+                                    selectedPeriod = selectedCashflowPeriod,
+                                    isDark = isDark,
+                                    currencyCode = currencyCode,
+                                    currencyFormat = currencyFormat
+                                )
+                            }
+                        }
+                    }
+                    2 -> { // Anggaran
+                        item {
+                            val data = statistikData
+                            if (data != null) {
+                                BudgetKategoriSection(
+                                    budgets = data.budgetKategori ?: emptyList(),
+                                    onTambahClick = { showBudgetDialog = true },
+                                    onDeleteClick = { budgetId -> 
+                                        budgetIdToDelete = budgetId
+                                        showHapusBudgetDialog = true
+                                    },
+                                    isDark = isDark,
+                                    currencyCode = currencyCode,
+                                    currencyFormat = currencyFormat
+                                )
+                            }
+                        }
 
             item {
                 val data = statistikData
@@ -393,52 +460,26 @@ fun StatistikScreen(
                 }
             }
 
-            item {
-                val data = statistikData
-                if (data != null) {
-                    CashflowChartsSection(
-                        data = data,
-                        isDark = isDark,
-                        selectedPeriod = selectedCashflowPeriod,
-                        onPeriodChange = { selectedCashflowPeriod = it },
-                        includeCategoryChart = true
-                    )
+                    }
                 }
             }
 
-            item {
-                val data = statistikData
-                if (data != null) {
-                    RecentActivitySection(
-                        transactions = data.recentTransactions.orEmpty(),
-                        isDark = isDark
-                    )
-                }
-            }
-
-            item {
-                val data = statistikData
-                if (data != null) {
-                    ProgressComparisonSection(
-                        data = data,
-                        selectedPeriod = selectedCashflowPeriod,
-                        isDark = isDark
-                    )
-                }
-            }
-        }
-
-        if (showBudgetDialog) {
-            BudgetManagementDialog(
-                onDismiss = { showBudgetDialog = false },
-                onConfirm = { kategori, nominal, periode, tglMulai, tglAkhir ->
-                    homeViewModel.simpanBudgetKategori(userId, kategori, nominal, periode, tglMulai, tglAkhir)
-                },
-                kategoriList = statistikData?.kategoriList ?: emptyList(),
-                isDark = isDark,
-                isLoading = budgetActionResult is BudgetActionResult.Loading
-            )
-        }
+        BudgetFormSheet(
+            isVisible = showBudgetDialog,
+            isLoading = budgetActionResult is BudgetActionResult.Loading,
+            onDismiss = { showBudgetDialog = false },
+            onSubmit = { formData ->
+                homeViewModel.simpanBudgetKategori(
+                    userId = userId,
+                    kategori = formData.category,
+                    nominal = formData.amount,
+                    periode = formData.period,
+                    tanggalMulai = formData.startDate,
+                    tanggalAkhir = formData.endDate
+                )
+            },
+            isDark = isDark
+        )
 
         if (showHapusBudgetDialog) {
             HapusBudgetDialog(
@@ -766,8 +807,8 @@ fun TooltipRow(label: String, value: String, color: Color, isBold: Boolean = fal
     }
 }
 
-fun formatCurrency(amount: Double): String {
-    return "Rp ${String.format("%,.0f", amount).replace(',', '.')}"
+fun formatCurrency(amount: Double, currencyCode: String = "IDR", formatMode: String = "standard"): String {
+    return com.example.kassaku.ui.components.formatCurrencyFlexible(amount, currencyCode, formatMode)
 }
 
 private fun fallbackSummaryFromSeries(series: CashflowPeriodData): StatistikSummaryData {
@@ -777,110 +818,15 @@ private fun fallbackSummaryFromSeries(series: CashflowPeriodData): StatistikSumm
     )
 }
 
-@Composable
-private fun StatistikOverviewSection(
-    data: StatistikData,
-    onTambahPemasukan: () -> Unit,
-    onTambahPengeluaran: () -> Unit,
-    isDark: Boolean
-) {
-    val summary = data.summary ?: fallbackSummaryFromSeries(resolveCashflowPeriodData(data, data.defaultCashflowPeriod ?: "30d"))
-    val surfaceColor = if (isDark) iOSGroupedBackgroundDark else Color.White
-    val textColor = if (isDark) Color.White else iOSLabelLight
-    val secondaryColor = if (isDark) iOSSecondaryLabelDark else iOSSecondaryLabelLight
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .shadow(12.dp, RoundedCornerShape(28.dp), spotColor = StitchPrimary.copy(alpha = 0.18f)),
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = surfaceColor),
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            StitchPrimary.copy(alpha = if (isDark) 0.28f else 0.16f)
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(KassakuSpacing.cardInnerLarge),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(46.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(StitchPrimary.copy(alpha = 0.14f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.Payments, contentDescription = null, tint = StitchPrimary)
-                }
-                Spacer(modifier = Modifier.width(14.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Saldo Aktif",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Black,
-                        color = secondaryColor,
-                        letterSpacing = 1.sp
-                    )
-                    Text(
-                        text = formatCurrency(summary.saldo),
-                        fontSize = summaryBalanceFontSize(summary.saldo),
-                        fontWeight = FontWeight.Black,
-                        color = textColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        letterSpacing = 0.sp
-                    )
-                }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Button(
-                    onClick = onTambahPemasukan,
-                    modifier = Modifier.weight(1f).height(52.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = StitchPrimary)
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Pemasukan", fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                Button(
-                    onClick = onTambahPengeluaran,
-                    modifier = Modifier.weight(1f).height(52.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = StitchAccentRed)
-                ) {
-                    Text("-", fontSize = 22.sp, fontWeight = FontWeight.Black)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Pengeluaran", fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-            }
-        }
-    }
-}
-
-private fun summaryBalanceFontSize(value: Double): androidx.compose.ui.unit.TextUnit {
-    val length = formatCurrency(value).length
-    return when {
-        length > 22 -> 24.sp
-        length > 18 -> 28.sp
-        length > 14 -> 32.sp
-        else -> 36.sp
-    }
-}
 
 @Composable
 private fun MonthlySummarySection(
     summary: StatistikSummaryData?,
     fallbackSeries: CashflowPeriodData,
-    isDark: Boolean
+    isDark: Boolean,
+    currencyCode: String = "IDR",
+    currencyFormat: String = "standard"
 ) {
     val resolvedSummary = summary ?: fallbackSummaryFromSeries(fallbackSeries)
     Column(verticalArrangement = Arrangement.spacedBy(KassakuSpacing.elementGap + 4.dp)) {
@@ -895,7 +841,9 @@ private fun MonthlySummarySection(
             value = resolvedSummary.monthlyPemasukan,
             subtitle = "Total uang masuk bulan berjalan",
             toneColor = StitchPrimary,
-            isDark = isDark
+            isDark = isDark,
+            currencyCode = currencyCode,
+            currencyFormat = currencyFormat
         )
         MonthlyMoneyCard(
             title = "Pengeluaran Bulan Ini",
@@ -904,7 +852,9 @@ private fun MonthlySummarySection(
             toneColor = StitchAccentRed,
             isDark = isDark,
             progress = resolvedSummary.targetProgressPercent,
-            isWarning = resolvedSummary.isOverBudget
+            isWarning = resolvedSummary.isOverBudget,
+            currencyCode = currencyCode,
+            currencyFormat = currencyFormat
         )
     }
 }
@@ -917,7 +867,9 @@ private fun MonthlyMoneyCard(
     toneColor: Color,
     isDark: Boolean,
     progress: Double? = null,
-    isWarning: Boolean = false
+    isWarning: Boolean = false,
+    currencyCode: String = "IDR",
+    currencyFormat: String = "standard"
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -933,8 +885,8 @@ private fun MonthlyMoneyCard(
         ) {
             Text(title, fontSize = 13.sp, fontWeight = FontWeight.Black, color = if (isDark) iOSSecondaryLabelDark else iOSSecondaryLabelLight)
             Text(
-                text = formatCurrency(value),
-                fontSize = if (formatCurrency(value).length > 18) 24.sp else 28.sp,
+                text = formatCurrency(value, currencyCode, currencyFormat),
+                fontSize = if (formatCurrency(value, currencyCode, currencyFormat).length > 18) 24.sp else 28.sp,
                 fontWeight = FontWeight.Black,
                 color = toneColor,
                 maxLines = 1,
@@ -966,26 +918,45 @@ fun FinancialInsightsSection(
     data: StatistikData,
     selectedPeriod: String,
     aiInsightState: com.example.kassaku.viewmodel.AiInsightUiState,
-    isDark: Boolean
+    isDark: Boolean,
+    currencyCode: String = "IDR",
+    currencyFormat: String = "standard"
 ) {
-    val series = remember(data, selectedPeriod) { resolveCashflowPeriodData(data, selectedPeriod) }
-    val labels = series.labels
-    val pemasukan = series.income
-    val pengeluaran = series.expense
-    val nets = pemasukan.zip(pengeluaran) { inc, exp -> inc - exp }
     val summary = data.summary
-    val avgSavings = summary?.avgSavings ?: if (nets.isNotEmpty()) nets.average() else 0.0
-    val hasEnoughData = labels.size > 1
-    val mostWastefulIndex = if (hasEnoughData) pengeluaran.indices.maxByOrNull { pengeluaran[it] } ?: -1 else -1
-    val mostProductiveIndex = if (hasEnoughData) nets.indices.maxByOrNull { nets[it] } ?: -1 else -1
-    val fallbackTrend = if (nets.size >= 2) {
-        val last = nets.last()
-        val prev = nets[nets.size - 2]
+
+    // Use the top-level 6-month series (same as backend's buildSixMonthInsights) for fallbacks
+    val sixMonthLabels = data.labels
+    val sixMonthNet = if (data.net.isNotEmpty()) data.net else {
+        data.pemasukan.zip(data.pengeluaran) { inc, exp -> inc - exp }
+    }
+    val sixMonthPengeluaran = data.pengeluaran
+
+    // Always prefer summary from API (computed by backend using 6-month data, same as Web)
+    val avgSavings = summary?.avgSavings ?: if (sixMonthNet.isNotEmpty()) sixMonthNet.average() else 0.0
+
+    // Fallback: require at least 2 active months (matching backend logic)
+    val activeMonthsWithExp = sixMonthPengeluaran.count { it > 0.0 }
+    val activeMonthsWithNet = sixMonthNet.count { it != 0.0 }
+
+    val fallbackMostWasteful = if (activeMonthsWithExp >= 2) {
+        val idx = sixMonthPengeluaran.indices.maxByOrNull { sixMonthPengeluaran[it] } ?: -1
+        if (idx >= 0) sixMonthLabels.getOrNull(idx) else null
+    } else null
+
+    val fallbackMostProductive = if (activeMonthsWithNet >= 2) {
+        val idx = sixMonthNet.indices.maxByOrNull { sixMonthNet[it] } ?: -1
+        if (idx >= 0) sixMonthLabels.getOrNull(idx) else null
+    } else null
+
+    val fallbackTrend = if (sixMonthNet.size >= 2) {
+        val last = sixMonthNet.last()
+        val prev = sixMonthNet[sixMonthNet.size - 2]
         if (last > prev) "Meningkat" else if (last < prev) "Menurun" else "Stabil"
     } else "Stabil"
+
     val trend = summary?.trend ?: fallbackTrend
-    val mostProductive = summary?.mostProductiveMonth ?: if (mostProductiveIndex != -1) labels[mostProductiveIndex] else "-"
-    val mostWasteful = summary?.mostWastefulMonth ?: if (mostWastefulIndex != -1) labels[mostWastefulIndex] else "-"
+    val mostProductive = summary?.mostProductiveMonth ?: fallbackMostProductive ?: "-"
+    val mostWasteful = summary?.mostWastefulMonth ?: fallbackMostWasteful ?: "-"
 
     // AI Insight Card
     AiInsightCard(aiInsightState = aiInsightState, isDark = isDark)
@@ -1007,7 +978,7 @@ fun FinancialInsightsSection(
     ) {
         InsightCard(
             title = "Rata-rata Tabungan",
-            value = formatCurrency(avgSavings),
+            value = formatCurrency(avgSavings, currencyCode, currencyFormat),
             icon = Icons.Default.Payments,
             color = StitchPrimary,
             isDark = isDark,
@@ -1041,9 +1012,9 @@ fun FinancialInsightsSection(
             title = "Tren Finansial",
             value = trend,
             icon = when (trend) {
-                "Meningkat" -> Icons.Default.TrendingUp
-                "Menurun" -> Icons.Default.TrendingDown
-                else -> Icons.Default.TrendingFlat
+                "Meningkat" -> Icons.AutoMirrored.Filled.TrendingUp
+                "Menurun" -> Icons.AutoMirrored.Filled.TrendingDown
+                else -> Icons.AutoMirrored.Filled.TrendingFlat
             },
             color = if (trend == "Meningkat") StitchPrimary else if (trend == "Menurun") StitchAccentRed else Color.Gray,
             isDark = isDark,
@@ -1177,7 +1148,9 @@ fun InsightCard(
 fun ProgressComparisonSection(
     data: StatistikData,
     selectedPeriod: String,
-    isDark: Boolean
+    isDark: Boolean,
+    currencyCode: String = "IDR",
+    currencyFormat: String = "standard"
 ) {
     val series = remember(data, selectedPeriod) { resolveCashflowPeriodData(data, selectedPeriod) }
     val summary = data.summary
@@ -1220,7 +1193,7 @@ fun ProgressComparisonSection(
                     letterSpacing = 1.5.sp
                 )
                 Icon(
-                    imageVector = Icons.Default.TrendingUp,
+                    imageVector = Icons.AutoMirrored.Filled.TrendingUp,
                     contentDescription = null,
                     tint = Color.White.copy(alpha = 0.3f),
                     modifier = Modifier.size(22.dp)
@@ -1235,7 +1208,9 @@ fun ProgressComparisonSection(
                 diff = incDiff,
                 progress = if (prevMonthPemasukan > 0) (monthlyPemasukan / prevMonthPemasukan).toFloat().coerceIn(0f, 1f) else 1f,
                 barColor = StitchPrimary,
-                isDiffPositiveGood = true
+                isDiffPositiveGood = true,
+                currencyCode = currencyCode,
+                currencyFormat = currencyFormat
             )
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -1246,7 +1221,9 @@ fun ProgressComparisonSection(
                 diff = expDiff,
                 progress = if (prevMonthPengeluaran > 0) (monthlyPengeluaran / prevMonthPengeluaran).toFloat().coerceIn(0f, 1f) else 1f,
                 barColor = StitchAccentRed,
-                isDiffPositiveGood = false
+                isDiffPositiveGood = false,
+                currencyCode = currencyCode,
+                currencyFormat = currencyFormat
             )
 
             // Motivational text
@@ -1278,7 +1255,9 @@ private fun PerformaBarItem(
     diff: Double,
     progress: Float,
     barColor: Color,
-    isDiffPositiveGood: Boolean
+    isDiffPositiveGood: Boolean,
+    currencyCode: String = "IDR",
+    currencyFormat: String = "standard"
 ) {
     val isPositive = diff >= 0
     val diffColor = if (isDiffPositiveGood) {
@@ -1287,7 +1266,7 @@ private fun PerformaBarItem(
         if (isPositive) Color(0xFFF87171) else Color(0xFF34D399)
     }
     val arrow = if (isPositive) "↑" else "↓"
-    val formattedDiff = String.format(Locale.US, "%,.0f", Math.abs(diff)).replace(',', '.')
+    val formattedDiff = formatCurrency(Math.abs(diff), currencyCode, currencyFormat)
 
     Column {
         Row(
@@ -1507,7 +1486,9 @@ private fun DreamForecastCard(
 @Composable
 private fun RecentActivitySection(
     transactions: List<RiwayatItem>,
-    isDark: Boolean
+    isDark: Boolean,
+    currencyCode: String = "IDR",
+    currencyFormat: String = "standard"
 ) {
     if (transactions.isEmpty()) return
 
@@ -1531,7 +1512,12 @@ private fun RecentActivitySection(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 transactions.take(5).forEachIndexed { index, item ->
-                    RecentTransactionRow(item = item, isDark = isDark)
+                    RecentTransactionRow(
+                        item = item, 
+                        isDark = isDark,
+                        currencyCode = currencyCode,
+                        currencyFormat = currencyFormat
+                    )
                     if (index != transactions.take(5).lastIndex) {
                         HorizontalDivider(color = if (isDark) Color.White.copy(alpha = 0.06f) else Color.Black.copy(alpha = 0.06f))
                     }
@@ -1544,7 +1530,9 @@ private fun RecentActivitySection(
 @Composable
 private fun RecentTransactionRow(
     item: RiwayatItem,
-    isDark: Boolean
+    isDark: Boolean,
+    currencyCode: String = "IDR",
+    currencyFormat: String = "standard"
 ) {
     val isIncome = item.tipe?.lowercase(Locale.ROOT) == "pemasukan"
     val tone = if (isIncome) StitchPrimary else StitchAccentRed
@@ -1560,7 +1548,7 @@ private fun RecentTransactionRow(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = if (isIncome) Icons.Default.TrendingUp else Icons.Default.TrendingDown,
+                imageVector = if (isIncome) Icons.AutoMirrored.Filled.TrendingUp else Icons.AutoMirrored.Filled.TrendingDown,
                 contentDescription = null,
                 tint = tone,
                 modifier = Modifier.size(20.dp)
@@ -1585,7 +1573,7 @@ private fun RecentTransactionRow(
             )
         }
         Text(
-            text = "${if (isIncome) "+" else "-"}${formatCurrency(item.nominal ?: 0.0)}",
+            text = "${if (isIncome) "+" else "-"}${formatCurrency(item.nominal ?: 0.0, currencyCode, currencyFormat)}",
             fontSize = 13.sp,
             fontWeight = FontWeight.Black,
             color = tone,
@@ -1783,7 +1771,9 @@ fun BudgetKategoriSection(
     budgets: List<BudgetKategoriItem>,
     onTambahClick: () -> Unit,
     onDeleteClick: (Int) -> Unit,
-    isDark: Boolean
+    isDark: Boolean,
+    currencyCode: String = "IDR",
+    currencyFormat: String = "standard"
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -1836,7 +1826,9 @@ fun BudgetKategoriSection(
                 BudgetCard(
                     budget = budget,
                     onDelete = { onDeleteClick(budget.id) },
-                    isDark = isDark
+                    isDark = isDark,
+                    currencyCode = currencyCode,
+                    currencyFormat = currencyFormat
                 )
                 Spacer(modifier = Modifier.height(16.dp))
             }
@@ -1848,7 +1840,9 @@ fun BudgetKategoriSection(
 fun BudgetCard(
     budget: BudgetKategoriItem,
     onDelete: () -> Unit,
-    isDark: Boolean
+    isDark: Boolean,
+    currencyCode: String = "IDR",
+    currencyFormat: String = "standard"
 ) {
     val progress = budget.percentage?.toFloat()?.div(100f)?.coerceIn(0f, 1.2f) ?: 0f
     val isOver = budget.over ?: false
@@ -1867,7 +1861,7 @@ fun BudgetCard(
         "pendidikan", "school", "education" -> Icons.Default.School
         "tagihan", "bills", "listrik", "air" -> Icons.Default.Payments
         "cicilan" -> Icons.Default.CreditCard
-        "investasi", "investment" -> Icons.Default.TrendingUp
+        "investasi", "investment" -> Icons.AutoMirrored.Filled.TrendingUp
         else -> Icons.Default.Category
     }
 
@@ -1923,11 +1917,11 @@ fun BudgetCard(
             ) {
                 Column {
                     Text(text = "Terpakai", fontSize = 10.sp, color = iOSSecondaryLabelLight)
-                    Text(text = formatCurrency(budget.spent ?: 0.0), fontSize = 13.sp, fontWeight = FontWeight.Black, color = if (isDark) Color.White else Color.Black)
+                    Text(text = formatCurrency(budget.spent ?: 0.0, currencyCode, currencyFormat), fontSize = 13.sp, fontWeight = FontWeight.Black, color = if (isDark) Color.White else Color.Black)
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text(text = "Limit", fontSize = 10.sp, color = iOSSecondaryLabelLight)
-                    Text(text = formatCurrency(budget.nominal), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = statusColor)
+                    Text(text = formatCurrency(budget.nominal, currencyCode, currencyFormat), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = statusColor)
                 }
             }
 
@@ -1964,117 +1958,6 @@ fun BudgetCard(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun BudgetManagementDialog(
-    onDismiss: () -> Unit,
-    onConfirm: (String, Long, String, String?, String?) -> Unit,
-    kategoriList: List<String>,
-    isDark: Boolean,
-    isLoading: Boolean
-) {
-    var kategori by remember { mutableStateOf("") }
-    var nominal by remember { mutableStateOf("") }
-    var periode by remember { mutableStateOf("bulanan") }
-    var tglMulai by remember { mutableStateOf("") }
-    var tglAkhir by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Set Budget Kategori", fontWeight = FontWeight.Bold) },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                OutlinedTextField(
-                    value = kategori,
-                    onValueChange = { kategori = it },
-                    label = { Text("Kategori") },
-                    placeholder = { Text("Cth: Makanan") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp)
-                )
-
-                OutlinedTextField(
-                    value = nominal,
-                    onValueChange = { if (it.all { char -> char.isDigit() }) nominal = it },
-                    label = { Text("Limit Budget (Rp)") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    prefix = { Text("Rp ") }
-                )
-
-                Column {
-                    Text("Periode", fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        listOf("mingguan", "bulanan", "custom").forEach { p ->
-                            FilterChip(
-                                selected = periode == p,
-                                onClick = { periode = p },
-                                label = { Text(p.replaceFirstChar { it.uppercase() }) },
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                        }
-                    }
-                }
-
-                if (periode == "custom") {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = tglMulai,
-                            onValueChange = { tglMulai = it },
-                            label = { Text("Mulai") },
-                            placeholder = { Text("YYYY-MM-DD") },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(12.dp),
-                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp)
-                        )
-                        OutlinedTextField(
-                            value = tglAkhir,
-                            onValueChange = { tglAkhir = it },
-                            label = { Text("Akhir") },
-                            placeholder = { Text("YYYY-MM-DD") },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(12.dp),
-                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp)
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    if (kategori.isNotBlank() && nominal.isNotBlank()) {
-                        onConfirm(kategori, nominal.toLong(), periode, tglMulai.ifBlank { null }, tglAkhir.ifBlank { null })
-                    }
-                },
-                enabled = !isLoading && kategori.isNotBlank() && nominal.isNotBlank(),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = StitchPrimary)
-            ) {
-                if (isLoading) CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
-                else Text("Simpan Budget")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Batal")
-            }
-        },
-        shape = RoundedCornerShape(28.dp),
-        containerColor = if (isDark) iOSGroupedBackgroundDark else Color.White
-    )
-}
 
 @Composable
 fun HapusBudgetDialog(
@@ -2357,7 +2240,9 @@ fun CashflowChartsSection(
     selectedPeriod: String,
     onPeriodChange: (String) -> Unit,
     isDark: Boolean,
-    includeCategoryChart: Boolean = false
+    includeCategoryChart: Boolean = false,
+    currencyCode: String = "IDR",
+    currencyFormat: String = "standard"
 ) {
     val resolvedSeries = remember(data, selectedPeriod) {
         resolveCashflowPeriodData(data, selectedPeriod)
@@ -2428,7 +2313,9 @@ fun CashflowChartsSection(
         CashflowSummaryCards(
             series = resolvedData.series,
             periodLabel = resolvedData.periodLabel,
-            isDark = isDark
+            isDark = isDark,
+            currencyCode = currencyCode,
+            currencyFormat = currencyFormat
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -2479,7 +2366,9 @@ fun CashflowChartsSection(
 
         CashflowInsightCard(
             resolved = resolvedData,
-            isDark = isDark
+            isDark = isDark,
+            currencyCode = currencyCode,
+            currencyFormat = currencyFormat
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -2506,7 +2395,9 @@ fun CashflowChartsSection(
 private fun CashflowSummaryCards(
     series: CashflowPeriodData,
     periodLabel: String,
-    isDark: Boolean
+    isDark: Boolean,
+    currencyCode: String = "IDR",
+    currencyFormat: String = "standard"
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(KassakuSpacing.elementGap + 4.dp)) {
         Text(
@@ -2520,7 +2411,7 @@ private fun CashflowSummaryCards(
         SummaryMetricCard(
             title = "Total Pemasukan",
             subtitle = "Akumulasi periode aktif",
-            value = formatCurrency(series.totalIncome),
+            value = formatCurrency(series.totalIncome, currencyCode, currencyFormat),
             toneColor = StitchPrimary,
             isDark = isDark,
             modifier = Modifier.fillMaxWidth()
@@ -2528,7 +2419,7 @@ private fun CashflowSummaryCards(
         SummaryMetricCard(
             title = "Total Pengeluaran",
             subtitle = "Pengeluaran periode aktif",
-            value = formatCurrency(series.totalExpense),
+            value = formatCurrency(series.totalExpense, currencyCode, currencyFormat),
             toneColor = StitchAccentRed,
             isDark = isDark,
             modifier = Modifier.fillMaxWidth()
@@ -2537,7 +2428,7 @@ private fun CashflowSummaryCards(
         SummaryMetricCard(
             title = "Net Cashflow",
             subtitle = "Selisih masuk vs keluar",
-            value = formatCurrency(series.totalNet),
+            value = formatCurrency(series.totalNet, currencyCode, currencyFormat),
             toneColor = when {
                 series.totalNet > 0 -> StitchPrimary
                 series.totalNet < 0 -> StitchAccentRed
@@ -2938,7 +2829,9 @@ fun NetBarChart(
 @Composable
 private fun CashflowInsightCard(
     resolved: CashflowResolvedData,
-    isDark: Boolean
+    isDark: Boolean,
+    currencyCode: String = "IDR",
+    currencyFormat: String = "standard"
 ) {
     val series = resolved.series
     val totalNet = series.totalNet
@@ -2991,14 +2884,14 @@ private fun CashflowInsightCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "Net: ${formatCurrency(totalNet)}",
+                    text = "Net: ${formatCurrency(totalNet, currencyCode, currencyFormat)}",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = textColor
                 )
                 if (maxExpenseValue > 0) {
                     Text(
-                        text = "Puncak: ${formatCurrency(maxExpenseValue)}",
+                        text = "Puncak: ${formatCurrency(maxExpenseValue, currencyCode, currencyFormat)}",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = textColor

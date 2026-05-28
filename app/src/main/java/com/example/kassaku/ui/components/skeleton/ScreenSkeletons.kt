@@ -30,6 +30,7 @@ import com.example.kassaku.ui.theme.StitchBackgroundLight
 import com.example.kassaku.ui.theme.StitchPrimary
 import com.example.kassaku.ui.theme.StitchSurfaceDark
 import com.example.kassaku.ui.theme.StitchSurfaceLight
+import com.example.kassaku.ui.theme.*
 
 /**
  * Complete skeleton for the HomeScreen.
@@ -41,7 +42,7 @@ fun HomeScreenSkeleton(
     isDarkTheme: Boolean = isSystemInDarkTheme()
 ) {
     val shimmerBrush = rememberShimmerBrush(isDarkTheme)
-    val backgroundColor = if (isDarkTheme) StitchBackgroundDark else StitchBackgroundLight
+    val backgroundColor = if (isDarkTheme) iOSBackgroundDark else iOSBackgroundLight
     val surfaceColor = if (isDarkTheme) StitchSurfaceDark else StitchSurfaceLight
     val cardBackground = if (isDarkTheme) DarkSurfaceVariant else LightSurfaceVariant
 
@@ -241,7 +242,7 @@ fun RiwayatScreenSkeleton(
     isDarkTheme: Boolean = isSystemInDarkTheme()
 ) {
     val shimmerBrush = rememberShimmerBrush(isDarkTheme)
-    val backgroundColor = if (isDarkTheme) StitchBackgroundDark else StitchBackgroundLight
+    val backgroundColor = if (isDarkTheme) iOSBackgroundDark else iOSBackgroundLight
 
     Column(
         modifier = modifier
@@ -303,7 +304,7 @@ fun ImpianScreenSkeleton(
     isDarkTheme: Boolean = isSystemInDarkTheme()
 ) {
     val shimmerBrush = rememberShimmerBrush(isDarkTheme)
-    val backgroundColor = if (isDarkTheme) StitchBackgroundDark else StitchBackgroundLight
+    val backgroundColor = if (isDarkTheme) iOSBackgroundDark else iOSBackgroundLight
 
     Column(
         modifier = modifier
@@ -348,7 +349,7 @@ fun StatistikScreenSkeleton(
     isDarkTheme: Boolean = isSystemInDarkTheme()
 ) {
     val shimmerBrush = rememberShimmerBrush(isDarkTheme)
-    val backgroundColor = if (isDarkTheme) StitchBackgroundDark else StitchBackgroundLight
+    val backgroundColor = if (isDarkTheme) iOSBackgroundDark else iOSBackgroundLight
 
     Column(
         modifier = modifier
@@ -395,7 +396,7 @@ fun ProfileScreenSkeleton(
     isDarkTheme: Boolean = isSystemInDarkTheme()
 ) {
     val shimmerBrush = rememberShimmerBrush(isDarkTheme)
-    val backgroundColor = if (isDarkTheme) StitchBackgroundDark else StitchBackgroundLight
+    val backgroundColor = if (isDarkTheme) iOSBackgroundDark else iOSBackgroundLight
     val cardBackground = if (isDarkTheme) DarkSurfaceVariant else LightSurfaceVariant
 
     Column(

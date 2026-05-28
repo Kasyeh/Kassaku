@@ -9,6 +9,8 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Notes
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material3.*
@@ -40,6 +42,7 @@ fun TransactionDetailScreen(
     animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope
 ) {
     val riwayatUiState by homeViewModel.riwayatUiState.collectAsState()
+    val balanceData by homeViewModel.balanceData.collectAsState()
     val isDark = LocalIsDark.current
     
     // Find the item in the current state
@@ -47,7 +50,7 @@ fun TransactionDetailScreen(
         (riwayatUiState as? RiwayatUiState.Success)?.riwayatItems?.find { it.idTransaksi == transactionId }
     }
 
-    val backgroundColor = if (isDark) StitchBackgroundDark else StitchBackgroundLight
+    val backgroundColor = if (isDark) iOSBackgroundDark else iOSBackgroundLight
     val surfaceColor = if (isDark) StitchSurfaceDark else StitchSurfaceLight
     val textPrimary = if (isDark) Color.White else StitchTextPrimary
 
@@ -87,7 +90,7 @@ fun TransactionDetailScreen(
                 ) {
                     val isIncome = item.tipe?.equals("pemasukan", ignoreCase = true) == true
                     val amountColor = if (isIncome) StitchPrimary else StitchNegative
-                    val icon = if (isIncome) Icons.Rounded.Add else Icons.Rounded.Remove
+                    val icon = if (isIncome) Icons.AutoMirrored.Filled.TrendingUp else Icons.AutoMirrored.Filled.TrendingDown
                     val iconBgColor = if (isIncome) StitchPrimaryLight else Color(0x33EF4444)
                     val iconTint = if (isIncome) StitchPrimary else StitchNegative
 
@@ -109,11 +112,12 @@ fun TransactionDetailScreen(
                     Spacer(modifier = Modifier.height(24.dp))
 
                     // Amount
-                    val numberFormatter = NumberFormat.getCurrencyInstance(Locale("id", "ID")).apply {
-                        maximumFractionDigits = 0
-                    }
                     Text(
-                        text = numberFormatter.format(abs(item.nominal ?: 0.0)),
+                        text = com.example.kassaku.ui.components.formatCurrencyFlexible(
+                            amount = abs(item.nominal ?: 0.0),
+                            currencyCode = balanceData?.currency ?: "IDR",
+                            formatMode = balanceData?.currencyFormat ?: "standard"
+                        ),
                         style = MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.ExtraBold,
                         color = amountColor

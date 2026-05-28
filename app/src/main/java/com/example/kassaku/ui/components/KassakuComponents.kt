@@ -3,24 +3,37 @@ package com.example.kassaku.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.airbnb.lottie.compose.LottieAnimation
+import com.airbnb.lottie.compose.LottieCompositionSpec
+import com.airbnb.lottie.compose.LottieConstants
+import com.airbnb.lottie.compose.rememberLottieComposition
+import com.example.kassaku.R
 import com.example.kassaku.ui.theme.StitchSurfaceDark
 import com.example.kassaku.ui.theme.StitchTextPrimary
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Help
 import androidx.compose.material3.*
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.example.kassaku.ui.theme.StitchAccentRed
@@ -167,4 +180,51 @@ fun LogoutConfirmationDialog(
         shape = RoundedCornerShape(28.dp),
         containerColor = surfaceColor
     )
+}
+
+/**
+ * Reusable Lottie empty-state animation composable.
+ * Renders a looping Lottie animation with an optional title and subtitle.
+ */
+@Composable
+fun EmptyStateLottie(
+    message: String,
+    subtitle: String? = null,
+    animationSize: Dp = 120.dp,
+    isDark: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.empty))
+    val labelColor = if (isDark) Color.White else StitchTextPrimary
+    val secondaryColor = if (isDark) Color(0xFF94A3B8) else StitchTextSecondary
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        LottieAnimation(
+            composition = composition,
+            iterations = LottieConstants.IterateForever,
+            modifier = Modifier.size(animationSize)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = message,
+            fontWeight = FontWeight.Bold,
+            color = labelColor,
+            fontSize = 14.sp,
+            textAlign = TextAlign.Center
+        )
+        if (subtitle != null) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = subtitle,
+                fontWeight = FontWeight.Medium,
+                color = secondaryColor,
+                fontSize = 12.sp,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
 }

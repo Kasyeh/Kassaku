@@ -36,6 +36,8 @@ import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.Visibility
@@ -64,6 +66,7 @@ import com.example.kassaku.data.remote.model.BalanceData
 import com.example.kassaku.data.remote.model.RiwayatItem
 import com.example.kassaku.ui.theme.KassakuSpacing
 import com.example.kassaku.ui.theme.*
+import com.example.kassaku.ui.components.EmptyStateLottie
 import com.example.kassaku.ui.components.LogoutConfirmationDialog
 import com.example.kassaku.viewmodel.ExportPdfResult
 import com.example.kassaku.viewmodel.HomeViewModel
@@ -90,6 +93,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Remove
 import com.example.kassaku.ui.components.skeleton.SkeletonTransactionList
 import com.example.kassaku.ui.components.formatCurrencyFlexible
+import com.example.kassaku.ui.components.EmptyStateLottie
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -107,7 +111,7 @@ fun RiwayatScreen(
     val isDark = LocalIsDark.current
 
     // Colors based on theme/design
-    val backgroundColor = if (isDark) StitchBackgroundDark else StitchBackgroundLight
+    val backgroundColor = if (isDark) iOSBackgroundDark else iOSBackgroundLight
     val surfaceColor = if (isDark) StitchSurfaceDark else StitchSurfaceLight
     val primaryColor = StitchPrimary
     val textPrimary = if (isDark) Color.White else StitchTextPrimary
@@ -404,7 +408,11 @@ fun RiwayatScreen(
                         val filteredItems = state.riwayatItems
                         
                         if (filteredItems.isEmpty()) {
-                            EmptyState(message = "Belum ada catatan", subMessage = "Belum ada data untuk ditampilkan")
+                            EmptyStateLottie(
+                                message = "Belum ada catatan",
+                                subtitle = "Belum ada data untuk ditampilkan",
+                                isDark = isDark
+                            )
                         } else {
                             val groupedItems = filteredItems.groupBy { 
                                 it.tanggal?.split(" ")?.get(0) ?: "Tidak Diketahui" 
@@ -652,7 +660,7 @@ fun RiwayatItemRow(
     with(sharedTransitionScope) {
         val isIncome = item.tipe?.equals("pemasukan", ignoreCase = true) == true
     val amountColor = if (isIncome) StitchPrimary else StitchNegative
-    val icon = if (isIncome) Icons.Rounded.Add else Icons.Rounded.Remove
+    val icon = if (isIncome) Icons.AutoMirrored.Filled.TrendingUp else Icons.AutoMirrored.Filled.TrendingDown
     val iconBgColor = if (isIncome) StitchPrimaryLight else Color(0x33EF4444)
     val iconTint = if (isIncome) StitchPrimary else StitchNegative
     
@@ -730,30 +738,13 @@ fun RiwayatItemRow(
 
 @Composable
 fun EmptyState(message: String, subMessage: String) {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(
-            imageVector = Icons.Default.CalendarToday,
-            contentDescription = null,
-            modifier = Modifier.size(64.dp).alpha(0.2f),
-            tint = StitchTextSecondary
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = message,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = StitchTextPrimary
-        )
-        Text(
-            text = subMessage,
-            style = MaterialTheme.typography.bodyMedium,
-            color = StitchTextSecondary
-        )
-    }
+    val isDark = com.example.kassaku.ui.theme.LocalIsDark.current
+    EmptyStateLottie(
+        message = message,
+        subtitle = subMessage,
+        isDark = isDark,
+        modifier = Modifier.fillMaxSize()
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
