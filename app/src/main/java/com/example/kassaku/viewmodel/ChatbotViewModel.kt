@@ -41,7 +41,10 @@ class ChatbotViewModel : ViewModel() {
             try {
                 val response = ApiClient.api.askChatbot(text)
                 if (response.isSuccessful && response.body() != null) {
-                    val botMsg = response.body()!!.data
+                    val botMsg = response.body()!!.data ?: ChatbotMessage(
+                        type = "bot",
+                        text = "Maaf, respons tidak valid dari server."
+                    )
                     _messages.value = _messages.value + botMsg
                 } else {
                     _messages.value = _messages.value + ChatbotMessage(

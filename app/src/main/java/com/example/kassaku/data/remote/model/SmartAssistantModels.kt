@@ -8,20 +8,20 @@ data class NudgeResponse(
 )
 
 data class NudgeItem(
-    @SerializedName("id") val id: String,
-    @SerializedName("type") val type: String, // success, warning, info
-    @SerializedName("title") val title: String,
-    @SerializedName("message") val message: String,
-    @SerializedName("action_label") val actionLabel: String,
-    @SerializedName("action_type") val actionType: String // NAVIGATE_IMPIAN, NAVIGATE_TABUNGAN, dll
+    @SerializedName("id") val id: String?,
+    @SerializedName("type") val type: String?,
+    @SerializedName("title") val title: String?,
+    @SerializedName("message") val message: String?,
+    @SerializedName("action_label") val actionLabel: String?,
+    @SerializedName("action_type") val actionType: String?
 )
 
 data class ChatbotResponse(
-    @SerializedName("status") val status: String,
-    @SerializedName("data") val data: ChatbotMessage
+    @SerializedName("status") val status: String?,
+    @SerializedName("data") val data: ChatbotMessage?
 )
 
 data class ChatbotMessage(
-    @SerializedName("type") val type: String, // bot or user
-    @SerializedName("text") val text: String
+    @SerializedName("type") val type: String?,
+    @SerializedName("text") val text: String?
 )

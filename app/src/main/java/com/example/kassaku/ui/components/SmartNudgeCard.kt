@@ -79,32 +79,34 @@ fun SmartNudgeCard(
             Spacer(modifier = Modifier.width(KassakuSpacing.elementGap))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = nudge.title,
+                    text = nudge.title.orEmpty(),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = textColor
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = nudge.message,
+                    text = nudge.message.orEmpty(),
                     fontSize = 14.sp,
                     color = secondaryTextColor,
                     lineHeight = 20.sp
                 )
-                Spacer(modifier = Modifier.height(12.dp))
-                Button(
-                    onClick = { onActionClick(nudge.actionType) },
-                    colors = ButtonDefaults.buttonColors(containerColor = iconTint),
-                    shape = RoundedCornerShape(12.dp),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    modifier = Modifier.height(36.dp)
-                ) {
-                    Text(
-                        text = nudge.actionLabel,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
+                if (!nudge.actionLabel.isNullOrEmpty()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = { onActionClick(nudge.actionType.orEmpty()) },
+                        colors = ButtonDefaults.buttonColors(containerColor = iconTint),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        modifier = Modifier.height(36.dp)
+                    ) {
+                        Text(
+                            text = nudge.actionLabel,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
                 }
             }
         }

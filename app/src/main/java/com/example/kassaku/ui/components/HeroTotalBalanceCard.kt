@@ -207,13 +207,6 @@ fun HeroTotalBalanceCard(
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 2.sp
                         )
-                        Text(
-                            text = "Dompet aktif",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFFA7F3D0),
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 11.sp
-                        )
                     }
                 }
                 IconButton(

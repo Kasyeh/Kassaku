@@ -224,7 +224,10 @@ open class HomeViewModel(
                         try {
                             val response = ApiClient.api.getSmartNudges()
                             if (response.isSuccessful) {
-                                _smartNudges.value = response.body()?.data ?: emptyList()
+                                val nudges = response.body()?.data
+                                    ?.filter { !it.title.isNullOrEmpty() && !it.message.isNullOrEmpty() }
+                                    ?: emptyList()
+                                _smartNudges.value = nudges
                             } else {
                                 Log.w("HomeViewModel", "Nudges refresh failed: ${response.message()}")
                             }
@@ -558,7 +561,11 @@ open class HomeViewModel(
             try {
                 val response = ApiClient.api.getSmartNudges()
                 if (response.isSuccessful) {
-                    _smartNudges.value = response.body()?.data ?: emptyList()
+                    // Filter out nudges with null title/message to prevent Compose crash
+                    val nudges = response.body()?.data
+                        ?.filter { !it.title.isNullOrEmpty() && !it.message.isNullOrEmpty() }
+                        ?: emptyList()
+                    _smartNudges.value = nudges
                 } else {
                     android.util.Log.e("HomeViewModel", "Error fetching nudges: ${response.message()}")
                 }

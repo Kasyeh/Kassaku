@@ -40,29 +40,26 @@ import com.example.kassaku.ui.theme.*
 import com.example.kassaku.viewmodel.ChatbotViewModel
 
 @Composable
-fun rememberMarkdownAnnotatedString(text: String, boldColor: Color): AnnotatedString {
-    return remember(text, boldColor) {
+fun rememberMarkdownAnnotatedString(text: String?, boldColor: Color): AnnotatedString {
+    val safeText = text.orEmpty()
+    return remember(safeText, boldColor) {
         buildAnnotatedString {
             var currentIndex = 0
             val pattern = Regex("\\*\\*(.*?)\\*\\*")
-            val matches = pattern.findAll(text)
+            val matches = pattern.findAll(safeText)
             
             for (match in matches) {
-                // Append text before match
                 if (match.range.first > currentIndex) {
-                    append(text.substring(currentIndex, match.range.first))
+                    append(safeText.substring(currentIndex, match.range.first))
                 }
-                
-                // Append bold text
                 withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, color = boldColor)) {
                     append(match.groupValues[1])
                 }
-                
                 currentIndex = match.range.last + 1
             }
             
-            if (currentIndex < text.length) {
-                append(text.substring(currentIndex))
+            if (currentIndex < safeText.length) {
+                append(safeText.substring(currentIndex))
             }
         }
     }
@@ -339,7 +336,6 @@ fun ChatBubble(
     isLoading: Boolean = false
 ) {
     val isUser = message.type == "user"
-    
     val bubbleColor = if (isUser) {
         StitchPrimary
     } else {
