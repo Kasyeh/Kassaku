@@ -107,6 +107,12 @@ open class HomeViewModel(
     private val _smartNudges = MutableStateFlow<List<com.example.kassaku.data.remote.model.NudgeItem>>(emptyList())
     val smartNudges: StateFlow<List<com.example.kassaku.data.remote.model.NudgeItem>> = _smartNudges.asStateFlow()
 
+    private val _deleteTransactionResult = MutableStateFlow<TransactionActionResult>(TransactionActionResult.Idle)
+    val deleteTransactionResult: StateFlow<TransactionActionResult> = _deleteTransactionResult.asStateFlow()
+
+    private val _updateTransactionResult = MutableStateFlow<TransactionActionResult>(TransactionActionResult.Idle)
+    val updateTransactionResult: StateFlow<TransactionActionResult> = _updateTransactionResult.asStateFlow()
+
     fun setThemeMode(mode: ThemeMode) {
         _themeMode.value = mode
     }
@@ -117,19 +123,6 @@ open class HomeViewModel(
 
     open fun loadBalanceData(userId: Int) {
         startSessionMonitoring(userId)
-
-        // Initial load from API
-        viewModelScope.launch {
-            val result = transactionRepository.getUserBalance(userId)
-            result.fold(
-                onSuccess = { balanceData ->
-                    _balanceData.value = balanceData
-                },
-                onFailure = {
-                    _balanceData.value = null
-                }
-            )
-        }
 
         // Listen for Realtime Updates (Balance)
         if (monitoredUserId != userId) {
@@ -159,13 +152,11 @@ open class HomeViewModel(
                     
                     Log.d("HomeViewModel", "Realtime Sync: Current=$currentBalance, Firebase=$newSaldoStr")
 
-                    if (currentBalance == null || currentBalance.saldo != newSaldoStr) {
+                    if (currentBalance != null && currentBalance.saldo != newSaldoStr) {
                         Log.i("HomeViewModel", "Saldo mismatch detected! Triggering data refresh...")
                         
                         // Immediately update the balance number for perceived speed
-                        if (currentBalance != null) {
-                            _balanceData.value = currentBalance.copy(saldo = newSaldoStr)
-                        }
+                        _balanceData.value = currentBalance.copy(saldo = newSaldoStr)
                         
                         refreshAllData(userId)
                     }
@@ -597,44 +588,6 @@ open class HomeViewModel(
     }
 
     // ===============================
-    // RESET SALDO & RIWAYAT
-    // ===============================
-    private val _resetSaldoResult = MutableStateFlow<ResetSaldoResult>(ResetSaldoResult.Idle)
-    val resetSaldoResult: StateFlow<ResetSaldoResult> = _resetSaldoResult.asStateFlow()
-
-    fun resetSaldo(userId: Int, password: String) {
-        viewModelScope.launch {
-            _resetSaldoResult.value = ResetSaldoResult.Loading
-            try {
-                val response = ApiClient.api.resetSaldo(password)
-                if (response.isSuccessful && response.body()?.success == true) {
-                    _resetSaldoResult.value = ResetSaldoResult.Success(
-                        response.body()?.message ?: "Saldo berhasil direset"
-                    )
-                    // Refresh semua data setelah reset sukses
-                    loadBalanceData(userId)
-                    fetchRiwayatTransaksi(userId)
-                    fetchStatistik(userId)
-                    fetchImpian(userId)
-                } else {
-                    _resetSaldoResult.value = ResetSaldoResult.Error(
-                        response.body()?.message ?: "Gagal meriset saldo"
-                    )
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("HomeViewModel", "Error resetting saldo: ${e.message}", e)
-                _resetSaldoResult.value = ResetSaldoResult.Error(
-                    e.message ?: "Gagal meriset saldo"
-                )
-            }
-        }
-    }
-
-    fun resetResetSaldoResult() {
-        _resetSaldoResult.value = ResetSaldoResult.Idle
-    }
-
-    // ===============================
     // BUDGET PER KATEGORI
     // ===============================
     fun simpanBudgetKategori(
@@ -909,6 +862,60 @@ open class HomeViewModel(
     fun resetFeedbackResult() {
         _feedbackResult.value = FeedbackResult.Idle
     }
+
+    fun deleteTransaction(userId: Int, idTransaksi: Long) {
+        viewModelScope.launch {
+            _deleteTransactionResult.value = TransactionActionResult.Loading
+            val result = transactionRepository.deleteTransaction(idTransaksi)
+            result.fold(
+                onSuccess = { message ->
+                    _deleteTransactionResult.value = TransactionActionResult.Success(message)
+                    refreshAllData(userId)
+                },
+                onFailure = { exception ->
+                    _deleteTransactionResult.value = TransactionActionResult.Error(exception.message ?: "Gagal menghapus transaksi")
+                }
+            )
+        }
+    }
+
+    fun updateTransaction(
+        userId: Int,
+        idTransaksi: Long,
+        nominal: Long,
+        kategori: String,
+        keterangan: String?,
+        tanggal: String?
+    ) {
+        viewModelScope.launch {
+            _updateTransactionResult.value = TransactionActionResult.Loading
+            val result = transactionRepository.updateTransaction(idTransaksi, nominal, kategori, keterangan, tanggal)
+            result.fold(
+                onSuccess = { message ->
+                    _updateTransactionResult.value = TransactionActionResult.Success(message)
+                    refreshAllData(userId)
+                },
+                onFailure = { exception ->
+                    _updateTransactionResult.value = TransactionActionResult.Error(exception.message ?: "Gagal memperbarui transaksi")
+                }
+            )
+        }
+    }
+
+    fun resetDeleteTransactionResult() {
+        _deleteTransactionResult.value = TransactionActionResult.Idle
+    }
+
+    fun resetUpdateTransactionResult() {
+        _updateTransactionResult.value = TransactionActionResult.Idle
+    }
+}
+
+sealed interface TransactionActionResult {
+    object Idle : TransactionActionResult
+    object Loading : TransactionActionResult
+    data class Success(val message: String) : TransactionActionResult
+    data class Error(val message: String) : TransactionActionResult
 }
 
 sealed interface EmailUpdateResult {

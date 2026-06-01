@@ -123,10 +123,9 @@ fun HeroTotalBalanceCard(
     )
     val cardGradient = Brush.linearGradient(
         colors = listOf(
-            Color(0xFF059669),
-            StitchPrimary,
-            StitchPrimaryDark,
-            Color(0xFF0369A1)
+            Color(0xFF56DFCF), // Custom Theme Mint
+            Color(0xFF2DD4BF), // Teal 400
+            Color(0xFF3B82F6)  // Blue 500
         )
     )
 
@@ -137,7 +136,7 @@ fun HeroTotalBalanceCard(
             .shadow(
                 elevation = 28.dp,
                 shape = RoundedCornerShape(36.dp),
-                spotColor = StitchPrimary.copy(alpha = if (isDark) 0.45f else 0.35f),
+                spotColor = Color(0xFF56DFCF).copy(alpha = if (isDark) 0.45f else 0.35f),
                 ambientColor = PremiumShadowSecondary
             )
             .clip(RoundedCornerShape(36.dp))

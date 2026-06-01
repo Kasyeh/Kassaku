@@ -32,14 +32,6 @@ sealed class TargetPengeluaranResult {
     ) : TargetPengeluaranResult()
     data class Error(val message: String) : TargetPengeluaranResult()
 }
-
-sealed class ResetSaldoResult {
-    object Idle : ResetSaldoResult()
-    object Loading : ResetSaldoResult()
-    data class Success(val message: String) : ResetSaldoResult()
-    data class Error(val message: String) : ResetSaldoResult()
-}
-
 sealed class ExportPdfResult {
     object Idle : ExportPdfResult()
     object Loading : ExportPdfResult()

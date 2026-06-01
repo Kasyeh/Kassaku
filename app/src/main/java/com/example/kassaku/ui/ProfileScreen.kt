@@ -4,6 +4,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
@@ -18,6 +20,7 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
+import com.example.kassaku.ui.components.PremiumAlertDialog
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
@@ -51,6 +54,7 @@ import com.example.kassaku.data.remote.model.BalanceData
 import com.example.kassaku.utils.ThemeMode
 import com.example.kassaku.utils.SecurityPreferences
 import com.example.kassaku.utils.SecurityUtils
+import com.example.kassaku.utils.HapticManager
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -72,28 +76,24 @@ fun ProfileScreen(
     val isDark = LocalIsDark.current
     val backgroundColor = if (isDark) iOSBackgroundDark else iOSBackgroundLight
     val textPrimary = if (isDark) Color.White else StitchTextPrimary
-    val surfaceColor = if (isDark) StitchSurfaceDark else StitchSurfaceLight
+    val surfaceColor = if (isDark) iOSGroupedBackgroundDark else iOSGroupedBackgroundLight
     val textSecondary = if (isDark) Color(0xFF94A3B8) else StitchTextSecondary
+    val hapticManager = remember { HapticManager(context) }
 
     val balanceData by homeViewModel.balanceData.collectAsStateWithLifecycle()
     val statistikData by homeViewModel.statistikData.collectAsStateWithLifecycle()
-    val resetSaldoResult by homeViewModel.resetSaldoResult.collectAsStateWithLifecycle()
     val avatarUpdateResult by homeViewModel.avatarUpdateResult.collectAsStateWithLifecycle()
     val passwordUpdateResult by homeViewModel.passwordUpdateResult.collectAsStateWithLifecycle()
     val emailUpdateResult by homeViewModel.emailUpdateResult.collectAsStateWithLifecycle()
     val currencyUpdateResult by homeViewModel.currencyUpdateResult.collectAsStateWithLifecycle()
 
     var showCurrencySheet by remember { mutableStateOf(false) }
-    var showResetDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showPasswordDialog by remember { mutableStateOf(false) }
     var showEmailEditDialog by remember { mutableStateOf(false) }
     var showFeedbackDialog by remember { mutableStateOf(false) }
 
     val feedbackResult by homeViewModel.feedbackResult.collectAsStateWithLifecycle()
-    
-    val snackbarHostState = remember { SnackbarHostState() }
-    
     val username = balanceData?.username ?: "User"
     val avatarUrl = balanceData?.avatar
     val initial = if (username.isNotEmpty()) username.take(1).uppercase() else "?"
@@ -113,19 +113,7 @@ fun ProfileScreen(
         }
     }
 
-    LaunchedEffect(resetSaldoResult) {
-        when (val result = resetSaldoResult) {
-            is com.example.kassaku.viewmodel.ResetSaldoResult.Success -> {
-                snackbarHostState.showSnackbar(result.message)
-                homeViewModel.resetResetSaldoResult()
-            }
-            is com.example.kassaku.viewmodel.ResetSaldoResult.Error -> {
-                snackbarHostState.showSnackbar(result.message)
-                homeViewModel.resetResetSaldoResult()
-            }
-            else -> {}
-        }
-    }
+
 
     LaunchedEffect(avatarUpdateResult) {
         when (val result = avatarUpdateResult) {
@@ -145,12 +133,12 @@ fun ProfileScreen(
         when (val result = passwordUpdateResult) {
             is EmailUpdateResult.Success -> {
                 Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
-                homeViewModel.resetPasswordUpdateResult()
+                homeViewModel.resetEmailUpdateResult()
                 showPasswordDialog = false
             }
             is EmailUpdateResult.Error -> {
                 Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
-                homeViewModel.resetPasswordUpdateResult()
+                homeViewModel.resetEmailUpdateResult()
             }
             else -> {}
         }
@@ -222,7 +210,7 @@ fun ProfileScreen(
                     Text(
                         text = "Profil",
                         color = textPrimary,
-                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold)
+                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black)
                     )
                 }
             }
@@ -245,19 +233,24 @@ fun ProfileScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
+                        val isAvatarLoading = avatarUpdateResult is AvatarUpdateResult.Loading
+                        
                         Box(
                             modifier = Modifier
-                                .size(120.dp)
-                                .clickable { imagePickerLauncher.launch("image/*") },
+                                .size(124.dp)
+                                .clickable {
+                                    hapticManager.lightTick()
+                                    imagePickerLauncher.launch("image/*")
+                                },
                             contentAlignment = Alignment.Center
                         ) {
                             // Gradient Ring
                             Box(
                                 modifier = Modifier
-                                    .size(110.dp)
+                                    .size(118.dp)
                                     .clip(CircleShape)
                                     .background(Brush.linearGradient(listOf(StitchPrimary, Color(0xFF8B5CF6))))
-                                    .padding(4.dp)
+                                    .padding(3.dp)
                             ) {
                                 Box(
                                     modifier = Modifier
@@ -266,17 +259,10 @@ fun ProfileScreen(
                                         .background(surfaceColor),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    if (avatarUrl != null) {
-                                        val fixedUrl = avatarUrl
-                                            .replace("http://localhost:8000", "http://10.0.2.2:8000")
-                                            .replace("http://127.0.0.1:8000", "http://10.0.2.2:8000")
-                                            .replace("http://localhost/", "http://10.0.2.2:8000/")
-                                            .replace("http://127.0.0.1/", "http://10.0.2.2:8000/")
-                                            .replace("http://localhost", "http://10.0.2.2:8000")
-                                            
+                                    if (!avatarUrl.isNullOrEmpty()) {
                                         AsyncImage(
-                                            model = fixedUrl,
-                                            contentDescription = "Profile Avatar",
+                                            model = avatarUrl,
+                                            contentDescription = "Avatar",
                                             modifier = Modifier.fillMaxSize(),
                                             contentScale = ContentScale.Crop
                                         )
@@ -284,7 +270,7 @@ fun ProfileScreen(
                                         Text(
                                             text = initial,
                                             style = TextStyle(
-                                                fontSize = 40.sp,
+                                                fontSize = 44.sp,
                                                 fontWeight = FontWeight.Black,
                                                 brush = Brush.linearGradient(listOf(StitchPrimary, Color(0xFF8B5CF6)))
                                             )
@@ -292,37 +278,60 @@ fun ProfileScreen(
                                     }
                                 }
                             }
-                            
-                            // Edit Badge
-                            Surface(
+
+                            // Camera Badge overlay
+                            Box(
                                 modifier = Modifier
                                     .align(Alignment.BottomEnd)
                                     .offset(x = (-4).dp, y = (-4).dp)
-                                    .size(36.dp),
-                                shape = CircleShape,
-                                color = StitchTextPrimary,
-                                shadowElevation = 6.dp
+                                    .size(34.dp)
+                                    .shadow(4.dp, CircleShape)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.7f))
+                                    .border(1.dp, Color.White.copy(alpha = 0.2f), CircleShape),
+                                contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.CameraAlt,
-                                    contentDescription = "Ganti Avatar",
+                                    contentDescription = "Ubah Foto",
                                     tint = Color.White,
-                                    modifier = Modifier.padding(8.dp)
+                                    modifier = Modifier.size(16.dp)
                                 )
+                            }
+
+                            if (isAvatarLoading) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(112.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.Black.copy(alpha = 0.5f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(
+                                        color = StitchPrimary,
+                                        modifier = Modifier.size(36.dp),
+                                        strokeWidth = 3.dp
+                                    )
+                                }
                             }
                         }
                         
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
                             text = username,
-                            fontSize = 26.sp,
+                            fontSize = 24.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = textPrimary
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.clickable { showEmailEditDialog = true }.padding(4.dp)
+                            modifier = Modifier
+                                .clickable {
+                                    hapticManager.lightTick()
+                                    showEmailEditDialog = true
+                                }
+                                .padding(4.dp)
                         ) {
                             Text(
                                 text = balanceData?.email ?: "Tambah Email Pemulihan",
@@ -337,6 +346,175 @@ fun ProfileScreen(
                                 modifier = Modifier.size(14.dp), 
                                 tint = if (balanceData?.email.isNullOrEmpty()) StitchPrimary else textSecondary
                             )
+                        }
+                    }
+                }
+
+                // Bento-Grid Summary Cards
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        // Card 1: Tabungan Impian
+                        val activeDreamsCount = statistikData?.dreamForecast?.size ?: 0
+                        Card(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(115.dp)
+                                .clickable { hapticManager.lightTick() },
+                            shape = RoundedCornerShape(24.dp),
+                            colors = CardDefaults.cardColors(containerColor = surfaceColor),
+                            border = BorderStroke(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)),
+                            elevation = CardDefaults.cardElevation(defaultElevation = if (isDark) 0.dp else 1.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(16.dp),
+                                verticalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(Color(0xFFE0F2FE).copy(alpha = if (isDark) 0.15f else 0.85f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Star,
+                                            contentDescription = null,
+                                            tint = Color(0xFF0284C7),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                    Text(
+                                        text = "$activeDreamsCount",
+                                        style = TextStyle(
+                                            fontSize = 20.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = textPrimary
+                                        )
+                                    )
+                                }
+                                
+                                Column {
+                                    Text(
+                                        text = "Tabungan Impian",
+                                        style = TextStyle(
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = textPrimary
+                                        )
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "Target Impian Aktif",
+                                        style = TextStyle(
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = textSecondary
+                                        )
+                                    )
+                                }
+                            }
+                        }
+
+                        // Card 2: Batas Belanja
+                        val monthlyExpense = balanceData?.pengeluaran?.toDoubleOrNull() ?: 0.0
+                        val limitExpense = balanceData?.targetPengeluaran?.toDoubleOrNull() ?: 0.0
+                        val isOverlimit = limitExpense > 0 && monthlyExpense > limitExpense
+                        val spendPercent = if (limitExpense > 0) (monthlyExpense / limitExpense) else 0.0
+                        val budgetStatusColor = when {
+                            isOverlimit -> StitchNegative
+                            spendPercent >= 0.8 -> Color(0xFFF59E0B)
+                            else -> StitchPrimary
+                        }
+                        val budgetStatusText = when {
+                            limitExpense <= 0 -> "Belum Diatur"
+                            isOverlimit -> "Over Budget!"
+                            spendPercent >= 0.8 -> "Waspada!"
+                            else -> "Sangat Aman"
+                        }
+
+                        Card(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(115.dp)
+                                .clickable { hapticManager.lightTick() },
+                            shape = RoundedCornerShape(24.dp),
+                            colors = CardDefaults.cardColors(containerColor = surfaceColor),
+                            border = BorderStroke(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)),
+                            elevation = CardDefaults.cardElevation(defaultElevation = if (isDark) 0.dp else 1.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(16.dp),
+                                verticalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(budgetStatusColor.copy(alpha = 0.15f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.AccountBalanceWallet,
+                                            contentDescription = null,
+                                            tint = budgetStatusColor,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                    
+                                    Text(
+                                        text = budgetStatusText,
+                                        style = TextStyle(
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = budgetStatusColor
+                                        ),
+                                        maxLines = 1
+                                    )
+                                }
+                                
+                                Column {
+                                    Text(
+                                        text = "Batas Belanja",
+                                        style = TextStyle(
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = textPrimary
+                                        )
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = if (limitExpense > 0) {
+                                            "${(spendPercent * 100).toInt()}% terpakai"
+                                        } else {
+                                            "Target belanja"
+                                        },
+                                        style = TextStyle(
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = textSecondary
+                                        )
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -371,6 +549,7 @@ fun ProfileScreen(
                             subtitle = "Gunakan Biometrik / PIN perangkat",
                             isChecked = appLockEnabled,
                             onCheckedChange = { isChecked ->
+                                hapticManager.lightTick()
                                 if (isChecked) {
                                     val activity = SecurityUtils.getActivity(context)
                                     if (activity != null) {
@@ -408,15 +587,6 @@ fun ProfileScreen(
                     
                     SettingGroupCard(isDark = isDark, surfaceColor = surfaceColor) {
                         SettingItemRow(
-                            icon = Icons.Rounded.Payments,
-                            iconColor = Color(0xFF10B981),
-                            title = "Format Mata Uang",
-                            subtitle = "${balanceData?.currency ?: "IDR"} • ${if ((balanceData?.currencyFormat ?: "standard") == "compact") "Ringkas" else "Standar"}",
-                            onClick = { showCurrencySheet = true },
-                            isDark = isDark
-                        )
-                        HorizontalDivider(color = if (isDark) Color(0xFF334155) else Color(0xFFF1F5F9))
-                        SettingItemRow(
                             icon = Icons.Rounded.NotificationsActive,
                             iconColor = StitchPrimary,
                             title = "Pengingat Finansial",
@@ -430,7 +600,10 @@ fun ProfileScreen(
                             iconColor = textSecondary,
                             title = "Sistem Default",
                             isSelected = themeMode == ThemeMode.SYSTEM,
-                            onClick = { homeViewModel.setThemeMode(ThemeMode.SYSTEM) },
+                            onClick = { 
+                                hapticManager.lightTick()
+                                homeViewModel.setThemeMode(ThemeMode.SYSTEM) 
+                            },
                             isDark = isDark
                         )
                         HorizontalDivider(color = if (isDark) Color(0xFF334155) else Color(0xFFF1F5F9))
@@ -439,7 +612,10 @@ fun ProfileScreen(
                             iconColor = Color(0xFFF59E0B),
                             title = "Mode Terang",
                             isSelected = themeMode == ThemeMode.LIGHT,
-                            onClick = { homeViewModel.setThemeMode(ThemeMode.LIGHT) },
+                            onClick = { 
+                                hapticManager.lightTick()
+                                homeViewModel.setThemeMode(ThemeMode.LIGHT) 
+                            },
                             isDark = isDark
                         )
                         HorizontalDivider(color = if (isDark) Color(0xFF334155) else Color(0xFFF1F5F9))
@@ -448,7 +624,10 @@ fun ProfileScreen(
                             iconColor = Color(0xFF8B5CF6),
                             title = "Mode Gelap",
                             isSelected = themeMode == ThemeMode.DARK,
-                            onClick = { homeViewModel.setThemeMode(ThemeMode.DARK) },
+                            onClick = { 
+                                hapticManager.lightTick()
+                                homeViewModel.setThemeMode(ThemeMode.DARK) 
+                            },
                             isDark = isDark
                         )
                         HorizontalDivider(color = if (isDark) Color(0xFF334155) else Color(0xFFF1F5F9))
@@ -458,7 +637,10 @@ fun ProfileScreen(
                             title = "Warna Dinamis",
                             subtitle = "Tema menyesuaikan wallpaper hp",
                             isChecked = dynamicColor,
-                            onCheckedChange = { homeViewModel.setDynamicColor(it) },
+                            onCheckedChange = { 
+                                hapticManager.lightTick()
+                                homeViewModel.setDynamicColor(it) 
+                            },
                             isDark = isDark
                         )
                     }
@@ -481,22 +663,13 @@ fun ProfileScreen(
 
                 // Destructive Actions
                 item {
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                     SettingGroupCard(isDark = isDark, surfaceColor = surfaceColor) {
-                        SettingItemRowDestructive(
-                            icon = Icons.Rounded.DeleteSweep,
-                            title = "Hapus Semua Catatan",
-                            onClick = { showResetDialog = true },
-                            isDark = isDark,
-                            isWarning = true // Orange/Warning color
-                        )
-                        HorizontalDivider(color = if (isDark) Color(0xFF334155) else Color(0xFFF1F5F9))
                         SettingItemRowDestructive(
                             icon = Icons.AutoMirrored.Rounded.Logout,
                             title = "Keluar dari Akun",
                             onClick = { showLogoutDialog = true },
-                            isDark = isDark,
-                            isWarning = false // Red color
+                            isWarning = false
                         )
                     }
                 }
@@ -510,10 +683,20 @@ fun ProfileScreen(
             var confirmPassword by remember { mutableStateOf("") }
             val isEmailValid = inputEmail.isEmpty() || android.util.Patterns.EMAIL_ADDRESS.matcher(inputEmail).matches()
 
-            AlertDialog(
+            PremiumAlertDialog(
                 onDismissRequest = { showEmailEditDialog = false },
-                title = { Text("Atur Email Pemulihan") },
-                text = {
+                isDark = isDark,
+                title = "Atur Email Pemulihan",
+                confirmText = "Simpan",
+                confirmEnabled = isEmailValid && confirmPassword.isNotBlank() && emailUpdateResult !is EmailUpdateResult.Loading,
+                isConfirmLoading = emailUpdateResult is EmailUpdateResult.Loading,
+                onConfirm = {
+                    hapticManager.lightTick()
+                    if (isEmailValid && confirmPassword.isNotBlank()) {
+                        homeViewModel.updateEmail(userId, inputEmail, confirmPassword)
+                    }
+                },
+                content = {
                     Column(verticalArrangement = Arrangement.spacedBy(KassakuSpacing.cardGap)) {
                         OutlinedTextField(
                             value = inputEmail,
@@ -521,41 +704,24 @@ fun ProfileScreen(
                             label = { Text("Email Baru") },
                             isError = !isEmailValid,
                             singleLine = true,
+                            shape = RoundedCornerShape(14.dp),
                             keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Email),
                             modifier = Modifier.fillMaxWidth()
                         )
                         if (!isEmailValid) {
-                            Text("Format email tidak valid", color = StitchAccentRed, fontSize = 12.sp)
+                            Text("Format email tidak valid", color = StitchAccentRed, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp))
                         }
                         OutlinedTextField(
                             value = confirmPassword,
                             onValueChange = { confirmPassword = it },
                             label = { Text("Password Akun Saat Ini") },
                             singleLine = true,
+                            shape = RoundedCornerShape(14.dp),
                             visualTransformation = PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Password),
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            if (isEmailValid && confirmPassword.isNotBlank()) {
-                                homeViewModel.updateEmail(userId, inputEmail, confirmPassword)
-                            }
-                        },
-                        enabled = isEmailValid && confirmPassword.isNotBlank() && emailUpdateResult !is EmailUpdateResult.Loading
-                    ) { 
-                        if (emailUpdateResult is EmailUpdateResult.Loading) {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp))
-                        } else {
-                            Text("Simpan") 
-                        }
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showEmailEditDialog = false }) { Text("Batal") }
                 }
             )
         }
@@ -565,16 +731,27 @@ fun ProfileScreen(
             var newPassword by remember { mutableStateOf("") }
             var confirmPassword by remember { mutableStateOf("") }
             
-            AlertDialog(
+            PremiumAlertDialog(
                 onDismissRequest = { showPasswordDialog = false },
-                title = { Text("Ganti Password") },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(KassakuSpacing.elementGap + 4.dp)) {
+                isDark = isDark,
+                title = "Ganti Password",
+                confirmText = "Simpan",
+                confirmEnabled = currentPassword.isNotBlank() && newPassword.isNotBlank() && newPassword == confirmPassword && emailUpdateResult !is EmailUpdateResult.Loading,
+                isConfirmLoading = emailUpdateResult is EmailUpdateResult.Loading,
+                onConfirm = {
+                    hapticManager.lightTick()
+                    if (currentPassword.isNotBlank() && newPassword.isNotBlank() && newPassword == confirmPassword) {
+                        homeViewModel.updatePassword(currentPassword, newPassword, confirmPassword)
+                    }
+                },
+                content = {
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         OutlinedTextField(
                             value = currentPassword,
                             onValueChange = { currentPassword = it },
                             label = { Text("Password Lama") },
                             singleLine = true,
+                            shape = RoundedCornerShape(14.dp),
                             visualTransformation = PasswordVisualTransformation(),
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -583,6 +760,7 @@ fun ProfileScreen(
                             onValueChange = { newPassword = it },
                             label = { Text("Password Baru") },
                             singleLine = true,
+                            shape = RoundedCornerShape(14.dp),
                             visualTransformation = PasswordVisualTransformation(),
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -591,120 +769,26 @@ fun ProfileScreen(
                             onValueChange = { confirmPassword = it },
                             label = { Text("Konfirmasi Password Baru") },
                             singleLine = true,
+                            shape = RoundedCornerShape(14.dp),
                             visualTransformation = PasswordVisualTransformation(),
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            homeViewModel.updatePassword(currentPassword, newPassword, confirmPassword)
-                        },
-                        enabled = currentPassword.isNotBlank() && newPassword.isNotBlank() && newPassword == confirmPassword
-                    ) {
-                        Text("Simpan")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showPasswordDialog = false }) { Text("Batal") }
                 }
             )
         }
 
-        if (showResetDialog) {
-            var resetPassword by remember { mutableStateOf("") }
-            var resetPasswordVisible by remember { mutableStateOf(false) }
 
-            AlertDialog(
-                onDismissRequest = { showResetDialog = false },
-                title = { Text("Hapus Semua Catatan?") },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(KassakuSpacing.cardGap)) {
-                        Text("Apakah Anda yakin ingin mereset saldo, menghapus semua catatan transaksi, dan impian? Tindakan ini tidak dapat dibatalkan.")
-                        OutlinedTextField(
-                            value = resetPassword,
-                            onValueChange = { resetPassword = it },
-                            label = { Text("Kata Sandi") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            visualTransformation = if (resetPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                            trailingIcon = {
-                                val image = if (resetPasswordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff
-                                IconButton(onClick = { resetPasswordVisible = !resetPasswordVisible }) {
-                                    Icon(imageVector = image, contentDescription = null)
-                                }
-                            },
-                            keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Password)
-                        )
-                    }
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            if(resetPassword.isNotEmpty()) {
-                                homeViewModel.resetSaldo(userId, resetPassword)
-                                showResetDialog = false
-                            }
-                        },
-                        enabled = resetPassword.isNotEmpty()
-                    ) {
-                        Text("Ya, Hapus Semua", color = MaterialTheme.colorScheme.error)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showResetDialog = false }) {
-                        Text("Batal")
-                    }
-                }
-            )
-        }
 
         if (showLogoutDialog) {
             LogoutConfirmationDialog(
                 onConfirm = {
+                    hapticManager.lightTick()
                     showLogoutDialog = false
                     onLogout()
                 },
                 onDismissRequest = { showLogoutDialog = false },
                 isDark = isDark
-            )
-        }
-
-        if (showCurrencySheet) {
-            var selectedCurrency by remember { mutableStateOf(balanceData?.currency ?: "IDR") }
-            var selectedFormat by remember { mutableStateOf(balanceData?.currencyFormat ?: "standard") }
-            
-            AlertDialog(
-                onDismissRequest = { showCurrencySheet = false },
-                title = { Text("Format Mata Uang") },
-                text = {
-                    Column {
-                        Text("Pilih Mata Uang", fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                            FilterChip(selected = selectedCurrency == "IDR", onClick = { selectedCurrency = "IDR" }, label = { Text("IDR") })
-                            FilterChip(selected = selectedCurrency == "USD", onClick = { selectedCurrency = "USD" }, label = { Text("USD") })
-                            FilterChip(selected = selectedCurrency == "MYR", onClick = { selectedCurrency = "MYR" }, label = { Text("MYR") })
-                        }
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text("Format Tampilan", fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                            FilterChip(selected = selectedFormat == "standard", onClick = { selectedFormat = "standard" }, label = { Text("Standar") })
-                            FilterChip(selected = selectedFormat == "compact", onClick = { selectedFormat = "compact" }, label = { Text("Ringkas") })
-                        }
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        homeViewModel.updateCurrency(userId, selectedCurrency, selectedFormat)
-                        showCurrencySheet = false
-                    }) {
-                        Text("Simpan")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showCurrencySheet = false }) { Text("Batal") }
-                }
             )
         }
 
@@ -716,39 +800,22 @@ fun ProfileScreen(
             val isLoading = feedbackResult is FeedbackResult.Loading
             val canSubmit = feedbackSubjek.isNotBlank() && feedbackPesan.isNotBlank() && !isLoading
 
-            AlertDialog(
-                onDismissRequest = {
-                    if (!isLoading) showFeedbackDialog = false
+            PremiumAlertDialog(
+                onDismissRequest = { showFeedbackDialog = false },
+                isDark = isDark,
+                title = "Berikan Feedback",
+                confirmText = "Kirim",
+                confirmEnabled = canSubmit,
+                onConfirm = {
+                    hapticManager.lightTick()
+                    homeViewModel.sendFeedback(
+                        subjek = feedbackSubjek.trim(),
+                        pesan = feedbackPesan.trim(),
+                        rating = if (feedbackRating > 0) feedbackRating else null
+                    )
                 },
-                shape = RoundedCornerShape(24.dp),
-                containerColor = if (isDark) StitchSurfaceDark else StitchSurfaceLight,
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFF8B5CF6).copy(alpha = 0.15f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Rounded.RateReview,
-                                contentDescription = null,
-                                tint = Color(0xFF8B5CF6),
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Text(
-                            "Kirim Masukan",
-                            fontWeight = FontWeight.Bold,
-                            color = if (isDark) Color.White else StitchTextPrimary
-                        )
-                    }
-                },
-                text = {
+                content = {
                     Column {
-                        // Rating Section
                         Text(
                             text = "Seberapa puas Anda?",
                             style = MaterialTheme.typography.bodyMedium,
@@ -762,7 +829,10 @@ fun ProfileScreen(
                         ) {
                             for (i in 1..5) {
                                 IconButton(
-                                    onClick = { feedbackRating = if (feedbackRating == i) 0 else i },
+                                    onClick = { 
+                                        hapticManager.lightTick()
+                                        feedbackRating = if (feedbackRating == i) 0 else i 
+                                    },
                                     modifier = Modifier.size(44.dp)
                                 ) {
                                     Icon(
@@ -795,7 +865,6 @@ fun ProfileScreen(
 
                         Spacer(Modifier.height(16.dp))
 
-                        // Subject Field (Radio Chips to match Web UX)
                         Text(
                             text = "Subjek Masukan",
                             style = MaterialTheme.typography.bodyMedium,
@@ -828,7 +897,10 @@ fun ProfileScreen(
                                             .weight(1f)
                                             .clip(RoundedCornerShape(12.dp))
                                             .background(chipBg)
-                                            .clickable { feedbackSubjek = option }
+                                            .clickable { 
+                                                hapticManager.lightTick()
+                                                feedbackSubjek = option 
+                                            }
                                             .padding(vertical = 12.dp, horizontal = 12.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
@@ -864,7 +936,10 @@ fun ProfileScreen(
                                             .weight(1f)
                                             .clip(RoundedCornerShape(12.dp))
                                             .background(chipBg)
-                                            .clickable { feedbackSubjek = option }
+                                            .clickable { 
+                                                hapticManager.lightTick()
+                                                feedbackSubjek = option 
+                                            }
                                             .padding(vertical = 12.dp, horizontal = 12.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
@@ -881,7 +956,6 @@ fun ProfileScreen(
 
                         Spacer(Modifier.height(12.dp))
 
-                        // Message Field
                         OutlinedTextField(
                             value = feedbackPesan,
                             onValueChange = { feedbackPesan = it },
@@ -898,38 +972,6 @@ fun ProfileScreen(
                             ),
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
                         )
-                    }
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            homeViewModel.sendFeedback(
-                                subjek = feedbackSubjek.trim(),
-                                pesan = feedbackPesan.trim(),
-                                rating = if (feedbackRating > 0) feedbackRating else null
-                            )
-                        },
-                        enabled = canSubmit,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6)),
-                        shape = RoundedCornerShape(14.dp)
-                    ) {
-                        if (isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                                color = Color.White
-                            )
-                            Spacer(Modifier.width(8.dp))
-                        }
-                        Text(if (isLoading) "Mengirim..." else "Kirim Masukan")
-                    }
-                },
-                dismissButton = {
-                    TextButton(
-                        onClick = { showFeedbackDialog = false },
-                        enabled = !isLoading
-                    ) {
-                        Text("Batal")
                     }
                 }
             )
@@ -960,8 +1002,8 @@ fun SettingGroupCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = surfaceColor),
-        border = if(!isDark) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF1F5F9)) else null,
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isDark) 0.dp else 2.dp)
+        border = BorderStroke(1.dp, if(isDark) Color(0xFF334155) else Color(0xFFF1F5F9)),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isDark) 0.dp else 1.dp)
     ) {
         Column(content = content)
     }
@@ -978,11 +1020,16 @@ fun SettingItemRow(
 ) {
     val textPrimary = if (isDark) Color.White else StitchTextPrimary
     val textSecondary = if (isDark) Color(0xFF94A3B8) else StitchTextSecondary
+    val context = LocalContext.current
+    val hapticManager = remember { HapticManager(context) }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .clickable { 
+                hapticManager.lightTick()
+                onClick() 
+            }
             .padding(horizontal = KassakuSpacing.cardInnerLarge, vertical = KassakuSpacing.cardInner),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1115,15 +1162,19 @@ fun SettingItemRowDestructive(
     icon: ImageVector,
     title: String,
     onClick: () -> Unit,
-    isDark: Boolean,
     isWarning: Boolean = false
 ) {
     val color = if (isWarning) Color(0xFFF59E0B) else Color(0xFFEF4444)
-    
+    val context = LocalContext.current
+    val hapticManager = remember { HapticManager(context) }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .clickable { 
+                hapticManager.lightTick()
+                onClick() 
+            }
             .padding(horizontal = 20.dp, vertical = 18.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1145,4 +1196,3 @@ fun SettingItemRowDestructive(
         )
     }
 }
-

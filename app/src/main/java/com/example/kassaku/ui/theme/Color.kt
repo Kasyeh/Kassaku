@@ -3,8 +3,8 @@ package com.example.kassaku.ui.theme
 import androidx.compose.ui.graphics.Color
 
 // Light & Dark Primary Colors
-val ToscaPrimary = Color(0xFF10B981)  // Emerald 500
-val ToscaContainer = Color(0xFFECFDF5) // Emerald 50 untuk container
+val ToscaPrimary = Color(0xFF56DFCF)  // Mint 500
+val ToscaContainer = Color(0xFFF0FDFB) // Mint 50 untuk container
 val SoftRed = Color(0xFFEF4444)       // Rose 500 untuk pengeluaran/error
 val GoldAccent = Color(0xFFF59E0B)    // Amber 500 untuk tertiary
 
@@ -23,9 +23,9 @@ val DarkSurfaceVariant = Color(0xFF2C2C2C)  // Darker gray for cards/chips
 val DarkOnSurfaceVariant = Color(0xFFBDBDBD)   // Lighter text for dark variants
 
 // Design Specific Colors
-val StitchPrimary = Color(0xFF10B981)
-val StitchPrimaryDark = Color(0xFF059669)
-val StitchPrimaryLight = Color(0x2610B981) // 15% opacity
+val StitchPrimary = Color(0xFF56DFCF)
+val StitchPrimaryDark = Color(0xFF3EC8B8)
+val StitchPrimaryLight = Color(0x2656DFCF) // 15% opacity
 val StitchNegative = Color(0xFFEF4444)
 val StitchAccentRed = Color(0xFFEF4444)
 val StitchBackgroundLight = Color(0xFFF8FAFC)
@@ -77,7 +77,7 @@ val InsightCardDark = Color(0xFF172554)        // Deep blue for dark mode
 val InsightCardAccent = Color(0xFF3B82F6)      // Blue accent for insights
 
 // Budget/Progress indicators
-val BudgetSafeGreen = Color(0xFF10B981)        // Clean green for safe budget
+val BudgetSafeGreen = Color(0xFF56DFCF)        // Clean green for safe budget
 val BudgetWarningAmber = Color(0xFFF59E0B)     // Amber for warning (80%+)
 val BudgetDangerRed = Color(0xFFEF4444)        // Red for over budget
 
@@ -86,7 +86,7 @@ val PremiumShadowPrimary = Color(0x1A000000)   // 10% black - primary shadow
 val PremiumShadowSecondary = Color(0x0D000000) // 5% black - ambient shadow
 
 // Trend chart colors  
-val TrendPositive = Color(0xFF059669)          // Emerald for positive trends
+val TrendPositive = Color(0xFF3EC8B8)          // Mint for positive trends
 val TrendNegative = Color(0xFFDC2626)          // Red for negative trends
 val TrendNeutral = Color(0xFF6B7280)           // Gray for neutral
 

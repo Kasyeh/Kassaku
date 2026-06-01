@@ -248,4 +248,42 @@ class TransactionRepository(private val apiService: ApiService) {
             emit(BudgetActionResult.Error(e.message ?: "Terjadi kesalahan"))
         }
     }
+
+    /**
+     * Hapus transaksi
+     */
+    suspend fun deleteTransaction(idTransaksi: Long): Result<String> {
+        return try {
+            val response = apiService.deleteTransaction(idTransaksi)
+            if (response.isSuccessful && response.body()?.success == true) {
+                Result.success(response.body()?.message ?: "Transaksi berhasil dihapus")
+            } else {
+                Result.failure(Exception(response.body()?.message ?: "Gagal menghapus transaksi"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Ubah transaksi
+     */
+    suspend fun updateTransaction(
+        idTransaksi: Long,
+        nominal: Long,
+        kategori: String,
+        keterangan: String?,
+        tanggal: String?
+    ): Result<String> {
+        return try {
+            val response = apiService.updateTransaction(idTransaksi, nominal, kategori, keterangan, tanggal)
+            if (response.isSuccessful && response.body()?.success == true) {
+                Result.success(response.body()?.message ?: "Transaksi berhasil diperbarui")
+            } else {
+                Result.failure(Exception(response.body()?.message ?: "Gagal memperbarui transaksi"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

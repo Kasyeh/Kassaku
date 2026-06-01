@@ -832,7 +832,7 @@ fun HomeExploreRow(
 ) {
     val items = listOf(
         HomeExploreItem("Riwayat", Icons.Rounded.History, BottomNavItem.Riwayat.route, StitchPrimary),
-        HomeExploreItem("Tabungan", Icons.Rounded.Stars, BottomNavItem.Impian.route, Color(0xFF059669)),
+        HomeExploreItem("Tabungan", Icons.Rounded.Stars, BottomNavItem.Impian.route, StitchPrimaryDark),
         HomeExploreItem("Ringkasan", Icons.Rounded.Analytics, BottomNavItem.Statistik.route, Color(0xFFD97706)),
         HomeExploreItem("Profil", Icons.Rounded.AccountCircle, BottomNavItem.Profil.route, Color(0xFF0284C7))
     )
@@ -1013,7 +1013,7 @@ fun FeatureMenuCard(
 
 @Composable
 fun ActionButton(text: String, icon: ImageVector, backgroundColor: Color, contentColor: Color, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val gradientColors = if (backgroundColor == StitchPrimary) listOf(Color(0xFF10B981), Color(0xFF059669)) else if (backgroundColor == StitchAccentRed) listOf(Color(0xFFEF4444), Color(0xFFDC2626)) else listOf(backgroundColor, backgroundColor.copy(alpha = 0.85f))
+    val gradientColors = if (backgroundColor == StitchPrimary) listOf(StitchPrimary, StitchPrimaryDark) else if (backgroundColor == StitchAccentRed) listOf(Color(0xFFEF4444), Color(0xFFDC2626)) else listOf(backgroundColor, backgroundColor.copy(alpha = 0.85f))
     Box(modifier = modifier.height(56.dp).shadow(8.dp, RoundedCornerShape(16.dp), spotColor = backgroundColor.copy(alpha = 0.3f)).clip(RoundedCornerShape(16.dp)).background(Brush.horizontalGradient(gradientColors)).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
             Icon(icon, null, tint = contentColor, modifier = Modifier.size(18.dp))

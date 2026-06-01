@@ -129,7 +129,7 @@ fun ReminderSettingsScreen(
                     ) {
                         item {
                             Text(
-                                "REMINDER OTOMATIS",
+                                "ASISTEN & NOTIFIKASI PINTAR",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = textSecondary,
@@ -140,8 +140,8 @@ fun ReminderSettingsScreen(
                         // Master Toggle Card
                         item {
                             ReminderSectionCard(
-                                title = "Aktifkan semua reminder",
-                                subtitle = "Matikan opsi ini jika Anda ingin menghentikan semua pengingat otomatis.",
+                                title = "Aktifkan Semua Notifikasi",
+                                subtitle = "Nyalakan opsi ini agar asisten pintar KasSaku dapat mengirim pesan penting ke HP Anda.",
                                 isEnabled = remindersEnabled,
                                 onToggle = { viewModel.remindersEnabled.value = it },
                                 surfaceColor = surfaceColor,
@@ -152,81 +152,198 @@ fun ReminderSettingsScreen(
                             )
                         }
 
-                        if (remindersEnabled) {
-                            // Daily Reminder Section
-                            item {
-                                Column(verticalArrangement = Arrangement.spacedBy(KassakuSpacing.elementGap + 4.dp)) {
-                                    ReminderOptionRow(
-                                        label = "Reminder harian jika belum ada transaksi",
-                                        isSelected = dailyReminderEnabled,
-                                        onSelect = { viewModel.dailyReminderEnabled.value = it },
-                                        accentColor = accentColor,
-                                        textPrimary = textPrimary
-                                    )
-                                    
-                                    if (dailyReminderEnabled) {
-                                        ReminderInputField(
-                                            label = "JAM REMINDER HARIAN",
-                                            value = dailyReminderHour,
-                                            onValueChange = { if(it.length <= 2) viewModel.dailyReminderHour.value = it },
-                                            placeholder = "20",
-                                            keyboardType = KeyboardType.Number,
-                                            surfaceColor = surfaceColor,
-                                            textPrimary = textPrimary,
-                                            textSecondary = textSecondary
+                        item {
+                            AnimatedVisibility(
+                                visible = remindersEnabled,
+                                enter = fadeIn() + expandVertically(),
+                                exit = fadeOut() + shrinkVertically()
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(KassakuSpacing.sectionGap)) {
+                                    // Daily Reminder Section
+                                    Column(verticalArrangement = Arrangement.spacedBy(KassakuSpacing.elementGap + 4.dp)) {
+                                        ReminderOptionRow(
+                                            label = "Pengingat Lupa Mencatat Transaksi",
+                                            isSelected = dailyReminderEnabled,
+                                            onSelect = { viewModel.dailyReminderEnabled.value = it },
+                                            accentColor = accentColor,
+                                            textPrimary = textPrimary
                                         )
+                                        
+                                        AnimatedVisibility(
+                                            visible = dailyReminderEnabled,
+                                            enter = fadeIn() + expandVertically(),
+                                            exit = fadeOut() + shrinkVertically()
+                                        ) {
+                                            val hourFloat = dailyReminderHour.toFloatOrNull() ?: 20f
+                                            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        "KIRIM PENGINGAT SETIAP PUKUL",
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = textSecondary,
+                                                        letterSpacing = 1.sp
+                                                    )
+                                                    Text(
+                                                        String.format("%02d:00 WIB", hourFloat.toInt()),
+                                                        fontSize = 15.sp,
+                                                        fontWeight = FontWeight.Black,
+                                                        color = accentColor
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.height(8.dp))
+                                                Slider(
+                                                    value = hourFloat,
+                                                    onValueChange = { viewModel.dailyReminderHour.value = kotlin.math.round(it).toInt().toString() },
+                                                    valueRange = 0f..23f,
+                                                    steps = 22,
+                                                    colors = SliderDefaults.colors(
+                                                        thumbColor = accentColor,
+                                                        activeTrackColor = accentColor,
+                                                        inactiveTrackColor = Color.White.copy(alpha = 0.1f)
+                                                    )
+                                                )
+                                            }
+                                        }
                                     }
-                                }
-                            }
 
-                            // Budget Alert Section
-                            item {
-                                Column(verticalArrangement = Arrangement.spacedBy(KassakuSpacing.elementGap + 4.dp)) {
-                                    ReminderOptionRow(
-                                        label = "Reminder saat budget kategori menipis",
-                                        isSelected = budgetAlertEnabled,
-                                        onSelect = { viewModel.budgetAlertEnabled.value = it },
-                                        accentColor = accentColor,
-                                        textPrimary = textPrimary
-                                    )
-                                    
-                                    if (budgetAlertEnabled) {
-                                        ReminderInputField(
-                                            label = "AMBANG BUDGET (%)",
-                                            value = budgetAlertThreshold,
-                                            onValueChange = { if(it.length <= 3) viewModel.budgetAlertThreshold.value = it },
-                                            placeholder = "80",
-                                            keyboardType = KeyboardType.Number,
-                                            surfaceColor = surfaceColor,
-                                            textPrimary = textPrimary,
-                                            textSecondary = textSecondary
+                                    // Budget Alert Section
+                                    Column(verticalArrangement = Arrangement.spacedBy(KassakuSpacing.elementGap + 4.dp)) {
+                                        ReminderOptionRow(
+                                            label = "Alarm Batas Pengeluaran Kategori (Budget)",
+                                            isSelected = budgetAlertEnabled,
+                                            onSelect = { viewModel.budgetAlertEnabled.value = it },
+                                            accentColor = accentColor,
+                                            textPrimary = textPrimary
                                         )
+                                        
+                                        AnimatedVisibility(
+                                            visible = budgetAlertEnabled,
+                                            enter = fadeIn() + expandVertically(),
+                                            exit = fadeOut() + shrinkVertically()
+                                        ) {
+                                            val thresholdValue = budgetAlertThreshold.toFloatOrNull() ?: 80f
+                                            val warningColor = when {
+                                                thresholdValue < 75f -> Color(0xFF10B981) // Emerald Green
+                                                thresholdValue < 90f -> Color(0xFFF59E0B) // Amber Warning
+                                                else -> Color(0xFFEF4444) // Neon Red Critical
+                                            }
+                                            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        "BERI TAHU SAYA SAAT PENGELUARAN MENCAPAI (%)",
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = textSecondary,
+                                                        letterSpacing = 0.5.sp
+                                                    )
+                                                    Text(
+                                                        "${thresholdValue.toInt()}%",
+                                                        fontSize = 15.sp,
+                                                        fontWeight = FontWeight.Black,
+                                                        color = warningColor
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.height(8.dp))
+                                                Slider(
+                                                    value = thresholdValue,
+                                                    onValueChange = { viewModel.budgetAlertThreshold.value = kotlin.math.round(it).toInt().toString() },
+                                                    valueRange = 50f..100f,
+                                                    steps = 49,
+                                                    colors = SliderDefaults.colors(
+                                                        thumbColor = warningColor,
+                                                        activeTrackColor = warningColor,
+                                                        inactiveTrackColor = Color.White.copy(alpha = 0.1f)
+                                                    )
+                                                )
+                                            }
+                                        }
                                     }
-                                }
-                            }
 
-                            // Dream Reminder Section
-                            item {
-                                Column(verticalArrangement = Arrangement.spacedBy(KassakuSpacing.elementGap + 4.dp)) {
-                                    ReminderOptionRow(
-                                        label = "Reminder impian yang lama tidak disetor",
-                                        isSelected = dreamReminderEnabled,
-                                        onSelect = { viewModel.dreamReminderEnabled.value = it },
-                                        accentColor = accentColor,
-                                        textPrimary = textPrimary
-                                    )
-                                    
-                                    if (dreamReminderEnabled) {
-                                        ReminderInputField(
-                                            label = "JEDA TANPA SETORAN (HARI)",
-                                            value = dreamInactiveDays,
-                                            onValueChange = { if(it.length <= 2) viewModel.dreamInactiveDays.value = it },
-                                            placeholder = "7",
-                                            keyboardType = KeyboardType.Number,
-                                            surfaceColor = surfaceColor,
-                                            textPrimary = textPrimary,
-                                            textSecondary = textSecondary
+                                    // Dream Reminder Section
+                                    Column(verticalArrangement = Arrangement.spacedBy(KassakuSpacing.elementGap + 4.dp)) {
+                                        ReminderOptionRow(
+                                            label = "Pemberi Semangat & Motivator Impian",
+                                            isSelected = dreamReminderEnabled,
+                                            onSelect = { viewModel.dreamReminderEnabled.value = it },
+                                            accentColor = accentColor,
+                                            textPrimary = textPrimary
                                         )
+                                        
+                                        AnimatedVisibility(
+                                            visible = dreamReminderEnabled,
+                                            enter = fadeIn() + expandVertically(),
+                                            exit = fadeOut() + shrinkVertically()
+                                        ) {
+                                            val inactiveDaysValue = dreamInactiveDays.toFloatOrNull() ?: 7f
+                                            val chips = listOf(3 to "3 Hari", 7 to "7 Hari", 14 to "14 Hari", 30 to "30 Hari")
+                                            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        "INGATKAN JIKA BELUM MENYETOR SELAMA",
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = textSecondary,
+                                                        letterSpacing = 0.5.sp
+                                                    )
+                                                    Text(
+                                                        "${inactiveDaysValue.toInt()} Hari",
+                                                        fontSize = 15.sp,
+                                                        fontWeight = FontWeight.Black,
+                                                        color = accentColor
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.height(12.dp))
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    chips.forEach { (days, label) ->
+                                                        val isSelected = inactiveDaysValue.toInt() == days
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .weight(1f)
+                                                                .clip(RoundedCornerShape(12.dp))
+                                                                .background(if (isSelected) accentColor else surfaceColor.copy(alpha = 0.4f))
+                                                                .clickable { viewModel.dreamInactiveDays.value = days.toString() }
+                                                                .padding(vertical = 10.dp),
+                                                            contentAlignment = Alignment.Center
+                                                        ) {
+                                                            Text(
+                                                                label,
+                                                                color = if (isSelected) Color.White else textSecondary,
+                                                                fontSize = 12.sp,
+                                                                fontWeight = FontWeight.Bold
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                                Spacer(modifier = Modifier.height(12.dp))
+                                                Slider(
+                                                    value = inactiveDaysValue,
+                                                    onValueChange = { viewModel.dreamInactiveDays.value = kotlin.math.round(it).toInt().toString() },
+                                                    valueRange = 1f..30f,
+                                                    steps = 28,
+                                                    colors = SliderDefaults.colors(
+                                                        thumbColor = accentColor,
+                                                        activeTrackColor = accentColor,
+                                                        inactiveTrackColor = Color.White.copy(alpha = 0.1f)
+                                                    )
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }

@@ -72,7 +72,7 @@ class ChatbotViewModel : ViewModel() {
                     _messages.value = listOf(
                         ChatbotMessage(
                             type = "bot",
-                            text = "Riwayat chat kita sudah dibersihkan ya! Ada yang bisa aku bantu dari awal? 😊"
+                            text = "Riwayat chat kita sudah dibersihkan ya! Ada yang bisa aku bantu dari awal?"
                         )
                     )
                     onSuccess()

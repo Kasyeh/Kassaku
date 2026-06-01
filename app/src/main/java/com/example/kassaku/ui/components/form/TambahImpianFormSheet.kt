@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarToday
@@ -63,6 +65,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.kassaku.ui.theme.StitchPrimary
+import com.example.kassaku.ui.theme.StitchAccentRed
 import com.example.kassaku.ui.theme.StitchTextSecondary
 import kotlinx.coroutines.delay
 import java.text.NumberFormat
@@ -85,16 +88,14 @@ fun TambahImpianFormSheet(
     onDismiss: () -> Unit,
     onSubmit: (namaBarang: String, hargaBarang: Long, deadline: String, keterangan: String?, fotoBarang: Uri?) -> Unit,
     currencyCode: String,
+    initialNamaBarang: String = "",
     sheetState: SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 ) {
     if (!isVisible) return
 
     val accentColor = StitchPrimary
-    val formatter = NumberFormat.getNumberInstance(Locale("id", "ID")).apply {
-        maximumFractionDigits = 0
-    }
 
-    var namaBarang by remember { mutableStateOf("") }
+    var namaBarang by remember(initialNamaBarang, isVisible) { mutableStateOf(initialNamaBarang) }
     var hargaBarang by remember { mutableStateOf("") }
     var deadline by remember { mutableStateOf("") }
     var keterangan by remember { mutableStateOf("") }
@@ -159,6 +160,7 @@ fun TambahImpianFormSheet(
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp)
+                .verticalScroll(rememberScrollState())
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -193,6 +195,155 @@ fun TambahImpianFormSheet(
 
             Spacer(modifier = Modifier.height(20.dp))
 
+            // Amount Input (Primary focus for Target Price / Harga Barang)
+            AmountInputField(
+                value = hargaBarang,
+                onValueChange = { 
+                    hargaBarang = it
+                    isHargaError = false
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester),
+                isExpense = false,
+                isError = isHargaError,
+                errorMessage = if (isHargaError) "Harga harus lebih dari 0" else null,
+                enabled = !isSubmitting
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Quick Target Presets in Millions
+            Text(
+                text = "Pilih target dana:",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = StitchTextSecondary,
+                modifier = Modifier.padding(start = 4.dp)
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            val quickAmounts = listOf(1000000L, 2000000L, 5000000L, 10000000L, 25000000L, 50000000L)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                quickAmounts.chunked(3).forEach { rowItems ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        rowItems.forEach { nominalCepat ->
+                            Button(
+                                onClick = {
+                                    if (!isSubmitting) {
+                                        hargaBarang = nominalCepat.toString()
+                                        isHargaError = false
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    }
+                                },
+                                modifier = Modifier.weight(1f),
+                                enabled = !isSubmitting,
+                                shape = RoundedCornerShape(16.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = accentColor.copy(alpha = 0.12f),
+                                    contentColor = accentColor
+                                ),
+                                elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
+                            ) {
+                                val prefix = when (currencyCode) {
+                                    "USD" -> "$"
+                                    "MYR" -> "RM"
+                                    "EUR" -> "€"
+                                    "SGD" -> "S$"
+                                    else -> "Rp"
+                                }
+                                val formatted = if (currencyCode == "IDR" || prefix == "Rp") {
+                                    val formattedNum = String.format("%,d", nominalCepat).replace(',', '.')
+                                    "Rp $formattedNum"
+                                } else {
+                                    val formattedNum = String.format("%,d", nominalCepat)
+                                    "$prefix $formattedNum"
+                                }
+                                Text(
+                                    text = formatted,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Nama Barang Input
+            OutlinedTextField(
+                value = namaBarang,
+                onValueChange = { namaBarang = it; isNamaError = false },
+                label = { Text("Nama Barang") },
+                singleLine = true,
+                placeholder = { Text("Contoh: Laptop, Mobil, Umroh") },
+                isError = isNamaError,
+                supportingText = if (isNamaError) {
+                    { Text("Nama barang tidak boleh kosong", color = StitchAccentRed) }
+                } else null,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isSubmitting,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = accentColor,
+                    cursorColor = accentColor,
+                    focusedLabelColor = accentColor
+                )
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Common Dream suggestions
+            Text(
+                text = "Saran Impian:",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = StitchTextSecondary,
+                modifier = Modifier.padding(start = 4.dp)
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            val commonDreams = listOf(
+                CategoryOption("laptop", "Laptop 💻"),
+                CategoryOption("smartphone", "Gadget 📱"),
+                CategoryOption("motor", "Motor 🏍️"),
+                CategoryOption("mobil", "Mobil 🚗"),
+                CategoryOption("umroh", "Umroh 🕋"),
+                CategoryOption("menikah", "Menikah 💍"),
+                CategoryOption("liburan", "Liburan ✈️"),
+                CategoryOption("rumah", "Rumah 🏠")
+            )
+
+            CategoryChipRow(
+                categories = commonDreams,
+                selectedCategory = namaBarang,
+                onCategorySelected = { selectedLabel ->
+                    namaBarang = selectedLabel
+                    isNamaError = false
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    keyboardController?.hide()
+                },
+                isExpense = false,
+                enabled = !isSubmitting
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Image Upload Card
+            Text(
+                text = "Foto Impian (wajib):",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = StitchTextSecondary,
+                modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+            )
+
             OutlinedCard(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -212,7 +363,7 @@ fun TambahImpianFormSheet(
                 ),
                 border = CardDefaults.outlinedCardBorder().copy(
                     brush = androidx.compose.ui.graphics.SolidColor(
-                        if (isImageError) MaterialTheme.colorScheme.error
+                        if (isImageError) StitchAccentRed
                         else MaterialTheme.colorScheme.outline
                     )
                 )
@@ -238,7 +389,7 @@ fun TambahImpianFormSheet(
                                 contentDescription = "Upload foto",
                                 modifier = Modifier.size(48.dp),
                                 tint = if (isImageError)
-                                    MaterialTheme.colorScheme.error
+                                    StitchAccentRed
                                 else
                                     MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -246,7 +397,7 @@ fun TambahImpianFormSheet(
                                 text = "Klik untuk pilih foto",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = if (isImageError)
-                                    MaterialTheme.colorScheme.error
+                                    StitchAccentRed
                                 else
                                     MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -254,7 +405,7 @@ fun TambahImpianFormSheet(
                                 Text(
                                     text = "Foto wajib diisi",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.error
+                                    color = StitchAccentRed
                                 )
                             }
                         }
@@ -262,61 +413,9 @@ fun TambahImpianFormSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            OutlinedTextField(
-                value = namaBarang,
-                onValueChange = { namaBarang = it; isNamaError = false },
-                label = { Text("Nama Barang") },
-                singleLine = true,
-                placeholder = { Text("Contoh: Laptop, Mobil, Umroh") },
-                isError = isNamaError,
-                supportingText = { if (isNamaError) Text("Nama barang tidak boleh kosong") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .focusRequester(focusRequester),
-                enabled = !isSubmitting,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = accentColor,
-                    cursorColor = accentColor,
-                    focusedLabelColor = accentColor
-                )
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            OutlinedTextField(
-                value = hargaBarang,
-                onValueChange = { newValue ->
-                    hargaBarang = newValue.filter { it.isDigit() }
-                    isHargaError = false
-                },
-                label = { Text("Harga Barang") },
-                prefix = {
-                    val prefix = when (currencyCode) {
-                        "USD" -> "$"
-                        "MYR" -> "RM"
-                        "EUR" -> "€"
-                        "SGD" -> "S$"
-                        else -> "Rp"
-                    }
-                    Text(prefix)
-                },
-                singleLine = true,
-                placeholder = { Text("Contoh: 5000000") },
-                isError = isHargaError,
-                supportingText = { if (isHargaError) Text("Harga harus lebih dari 0") },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !isSubmitting,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = accentColor,
-                    cursorColor = accentColor,
-                    focusedLabelColor = accentColor
-                )
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
+            // Deadline selector card
             Surface(
                 onClick = {
                     if (!isSubmitting) {
@@ -357,7 +456,7 @@ fun TambahImpianFormSheet(
                         Text(
                             text = "Wajib diisi",
                             fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.error,
+                            color = StitchAccentRed,
                             fontWeight = FontWeight.Medium
                         )
                     }
@@ -366,6 +465,7 @@ fun TambahImpianFormSheet(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // Notes Input (Optional)
             OutlinedTextField(
                 value = keterangan,
                 onValueChange = { keterangan = it },
@@ -373,7 +473,12 @@ fun TambahImpianFormSheet(
                 label = { Text("Catatan (opsional)") },
                 placeholder = { Text("Contoh: Nabung untuk masa depan") },
                 singleLine = true,
-                enabled = !isSubmitting
+                enabled = !isSubmitting,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = accentColor,
+                    cursorColor = accentColor,
+                    focusedLabelColor = accentColor
+                )
             )
 
             Spacer(modifier = Modifier.height(28.dp))
@@ -424,7 +529,7 @@ fun TambahImpianFormSheet(
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
                     text = formState.message,
-                    color = MaterialTheme.colorScheme.error,
+                    color = StitchAccentRed,
                     fontSize = 14.sp,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -476,7 +581,7 @@ fun TambahImpianFormSheet(
                         showDismissConfirm = false
                         onDismiss()
                     },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    colors = ButtonDefaults.textButtonColors(contentColor = StitchAccentRed)
                 ) {
                     Text("Ya, Batalkan", fontWeight = FontWeight.Bold)
                 }

@@ -426,7 +426,7 @@ fun LoginScreen(
                             ) {
                                 Box(
                                     modifier = Modifier.fillMaxSize()
-                                        .background(Brush.horizontalGradient(listOf(primaryColor, Color(0xFF059669))), RoundedCornerShape(24.dp)),
+                                        .background(Brush.horizontalGradient(listOf(primaryColor, StitchPrimaryDark)), RoundedCornerShape(24.dp)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     if (loginUiState is LoginUiState.Loading) {
@@ -886,10 +886,10 @@ fun ForgotPasswordDialog(
                     is com.example.kassaku.viewmodel.ForgotPasswordState.PasswordResetSuccess -> {
                         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                             Icon(
-                                imageVector = androidx.compose.material.icons.Icons.Default.Check,
-                                contentDescription = null,
-                                tint = Color(0xFF10B981),
-                                modifier = Modifier.size(64.dp)
+                                  imageVector = androidx.compose.material.icons.Icons.Default.Check,
+                                  contentDescription = null,
+                                  tint = StitchPrimary,
+                                  modifier = Modifier.size(64.dp)
                             )
                             Spacer(Modifier.height(16.dp))
                             Text(

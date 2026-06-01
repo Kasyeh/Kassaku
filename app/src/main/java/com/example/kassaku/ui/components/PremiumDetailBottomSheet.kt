@@ -30,6 +30,7 @@ import coil.compose.AsyncImage
 import com.example.kassaku.data.remote.model.ImpianItem
 import com.example.kassaku.ui.formatDate
 import com.example.kassaku.ui.theme.StitchPrimary
+import com.example.kassaku.ui.theme.StitchPrimaryDark
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -119,16 +120,16 @@ fun PremiumDetailBottomSheet(
                             modifier = Modifier
                                 .align(Alignment.TopStart)
                                 .padding(24.dp)
-                                .background(Color(0xFF10B981).copy(alpha = 0.2f), RoundedCornerShape(20.dp))
-                                .border(1.dp, Color(0xFF10B981).copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                                .background(StitchPrimary.copy(alpha = 0.2f), RoundedCornerShape(20.dp))
+                                .border(1.dp, StitchPrimary.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
                                 .padding(horizontal = 16.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Icon(Icons.Default.Verified, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Verified, contentDescription = null, tint = StitchPrimary, modifier = Modifier.size(16.dp))
                             Text(
                                 text = "TARGET TERCAPAI",
-                                color = Color(0xFF10B981),
+                                color = StitchPrimary,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Black,
                                 letterSpacing = 1.sp
@@ -144,7 +145,7 @@ fun PremiumDetailBottomSheet(
                     ) {
                         Text(
                             text = "TARGET TABUNGAN",
-                            color = Color(0xFF10B981),
+                            color = StitchPrimary,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Black,
                             letterSpacing = 1.5.sp
@@ -207,7 +208,7 @@ fun PremiumDetailBottomSheet(
                                 )
                                 Text(
                                     text = formatCurrencyFlexible(danaTerkumpulVal.toDouble(), currencyCode),
-                                    color = Color(0xFF10B981),
+                                    color = StitchPrimary,
                                     fontSize = 24.sp,
                                     fontWeight = FontWeight.Black
                                 )
@@ -235,7 +236,7 @@ fun PremiumDetailBottomSheet(
                                     .height(12.dp)
                                     .background(
                                         Brush.horizontalGradient(
-                                            colors = listOf(Color(0xFF059669), Color(0xFF34D399))
+                                            colors = listOf(StitchPrimaryDark, StitchPrimary)
                                         ), 
                                         CircleShape
                                     )

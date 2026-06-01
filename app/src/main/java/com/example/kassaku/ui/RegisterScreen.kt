@@ -297,7 +297,7 @@ fun RegisterScreen(
                                     color = when(strength) {
                                         0, 1 -> Color(0xFFEF4444)
                                         2, 3 -> Color(0xFFF59E0B)
-                                        else -> Color(0xFF10B981)
+                                        else -> StitchPrimary
                                     },
                                     trackColor = if(isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f)
                                 )
@@ -342,7 +342,7 @@ fun RegisterScreen(
                             ) {
                                 Box(
                                     modifier = Modifier.fillMaxSize()
-                                        .background(Brush.horizontalGradient(listOf(primaryColor, Color(0xFF059669))), RoundedCornerShape(24.dp)),
+                                        .background(Brush.horizontalGradient(listOf(primaryColor, StitchPrimaryDark)), RoundedCornerShape(24.dp)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     if (registerUiState is RegisterUiState.Loading) {
@@ -392,7 +392,7 @@ fun RequirementItem(text: String, isMet: Boolean, isDark: Boolean) {
             imageVector = if (isMet) androidx.compose.material.icons.Icons.Default.CheckCircle else androidx.compose.material.icons.Icons.Default.Circle,
             contentDescription = null,
             modifier = Modifier.size(14.dp),
-            tint = if (isMet) Color(0xFF10B981) else (if(isDark) Color(0xFF475569) else Color(0xFFCBD5E1))
+            tint = if (isMet) StitchPrimary else (if(isDark) Color(0xFF475569) else Color(0xFFCBD5E1))
         )
         Spacer(Modifier.width(8.dp))
         Text(

@@ -85,7 +85,7 @@ interface ApiService {
         @Part("harga_barang") hargaBarang: okhttp3.RequestBody,
         @Part("deadline") deadline: okhttp3.RequestBody,
         @Part("keterangan") keterangan: okhttp3.RequestBody?,
-        @Part fotoBarang: okhttp3.MultipartBody.Part  // ✅ Tanpa nama & tidak nullable
+        @Part fotoBarang: okhttp3.MultipartBody.Part  // Tanpa nama & tidak nullable
     ): Response<TambahImpianResponse>
 
     // Export PDF Riwayat Transaksi
@@ -124,11 +124,20 @@ interface ApiService {
         @Field("target_pengeluaran") targetPengeluaran: Long
     ): Response<TargetPengeluaranResponse>
 
+    @POST("riwayat/hapus/{id_transaksi}")
+    suspend fun deleteTransaction(
+        @Path("id_transaksi") idTransaksi: Long
+    ): Response<BasicMessageResponse>
+
     @FormUrlEncoded
-    @POST("user/reset-saldo")
-    suspend fun resetSaldo(
-        @Field("password") password: String
-    ): Response<ResetSaldoResponse>
+    @POST("riwayat/ubah/{id_transaksi}")
+    suspend fun updateTransaction(
+        @Path("id_transaksi") idTransaksi: Long,
+        @Field("nominal") nominal: Long,
+        @Field("kategori") kategori: String,
+        @Field("keterangan") keterangan: String?,
+        @Field("tanggal") tanggal: String?
+    ): Response<BasicMessageResponse>
 
     @FormUrlEncoded
     @POST("impian/hapus/{id_impian}")

@@ -95,6 +95,14 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.foundation.BorderStroke
 
 private enum class CashflowChartUiState {
     Loading,
@@ -419,12 +427,9 @@ fun StatistikScreen(
                         item {
                             val data = statistikData
                             if (data != null) {
-                                ProgressComparisonSection(
+                                FinancialHealthSection(
                                     data = data,
-                                    selectedPeriod = selectedCashflowPeriod,
-                                    isDark = isDark,
-                                    currencyCode = currencyCode,
-                                    currencyFormat = currencyFormat
+                                    isDark = isDark
                                 )
                             }
                         }
@@ -1145,159 +1150,212 @@ fun InsightCard(
 }
 
 @Composable
-fun ProgressComparisonSection(
-    data: StatistikData,
-    selectedPeriod: String,
+fun FinancialHealthGauge(
+    score: Int,
+    activeColor: Color,
     isDark: Boolean,
-    currencyCode: String = "IDR",
-    currencyFormat: String = "standard"
+    modifier: Modifier = Modifier
 ) {
-    val series = remember(data, selectedPeriod) { resolveCashflowPeriodData(data, selectedPeriod) }
-    val summary = data.summary
-    val monthlyPemasukan = summary?.monthlyPemasukan ?: (series.income.lastOrNull() ?: 0.0)
-    val monthlyPengeluaran = summary?.monthlyPengeluaran ?: (series.expense.lastOrNull() ?: 0.0)
-    val prevMonthPemasukan = summary?.prevMonthPemasukan ?: if (series.income.size >= 2) series.income[series.income.size - 2] else 0.0
-    val prevMonthPengeluaran = summary?.prevMonthPengeluaran ?: if (series.expense.size >= 2) series.expense[series.expense.size - 2] else 0.0
+    val isDarkMode = isDark
+    val emptyColor = if (isDarkMode) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.05f)
+    
+    // Animate the score progress sweep
+    val animatedSweep = animateFloatAsState(
+        targetValue = (180f * (score / 100f)),
+        animationSpec = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
+        label = "GaugeSweep"
+    )
 
-    val incDiff = monthlyPemasukan - prevMonthPemasukan
-    val expDiff = monthlyPengeluaran - prevMonthPengeluaran
-
-    // Determine trend for motivational text
-    val nets = series.income.zip(series.expense) { inc, exp -> inc - exp }
-    val trend = summary?.trend ?: if (nets.size >= 2) {
-        val last = nets.last()
-        val prev = nets[nets.size - 2]
-        if (last > prev) "Meningkat" else if (last < prev) "Menurun" else "Stabil"
-    } else "Stabil"
-    val periodLabel = periodLabelMap[selectedPeriod] ?: selectedPeriod
-
-    Card(
-        shape = RoundedCornerShape(32.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isDark) Color(0xFF1C1C1E) else Color(0xFF1E1E2D)
-        ),
-        modifier = Modifier.fillMaxWidth()
+    Box(
+        modifier = modifier
+            .width(200.dp)
+            .height(115.dp),
+        contentAlignment = Alignment.BottomCenter
     ) {
-        Column(modifier = Modifier.padding(24.dp)) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Perkembangan $periodLabel",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Black,
-                    color = Color.White.copy(alpha = 0.5f),
-                    letterSpacing = 1.5.sp
-                )
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.TrendingUp,
-                    contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.3f),
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Pemasukan vs Lalu
-            PerformaBarItem(
-                label = "Uang Masuk vs Lalu",
-                diff = incDiff,
-                progress = if (prevMonthPemasukan > 0) (monthlyPemasukan / prevMonthPemasukan).toFloat().coerceIn(0f, 1f) else 1f,
-                barColor = StitchPrimary,
-                isDiffPositiveGood = true,
-                currencyCode = currencyCode,
-                currencyFormat = currencyFormat
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val strokeWidthPx = 12.dp.toPx()
+            val canvasWidth = size.width
+            
+            // Bounding box for the arc. The arc is drawn inside a square of size `canvasWidth`.
+            val arcSize = canvasWidth - strokeWidthPx
+            val left = strokeWidthPx / 2f
+            val top = strokeWidthPx / 2f
+            
+            // Background arc (semi-circle)
+            drawArc(
+                color = emptyColor,
+                startAngle = 180f,
+                sweepAngle = 180f,
+                useCenter = false,
+                topLeft = Offset(left, top),
+                size = Size(arcSize, arcSize),
+                style = Stroke(width = strokeWidthPx, cap = StrokeCap.Round)
             )
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Pengeluaran vs Lalu
-            PerformaBarItem(
-                label = "Uang Keluar vs Lalu",
-                diff = expDiff,
-                progress = if (prevMonthPengeluaran > 0) (monthlyPengeluaran / prevMonthPengeluaran).toFloat().coerceIn(0f, 1f) else 1f,
-                barColor = StitchAccentRed,
-                isDiffPositiveGood = false,
-                currencyCode = currencyCode,
-                currencyFormat = currencyFormat
+            
+            // Active progress arc
+            drawArc(
+                color = activeColor,
+                startAngle = 180f,
+                sweepAngle = animatedSweep.value,
+                useCenter = false,
+                topLeft = Offset(left, top),
+                size = Size(arcSize, arcSize),
+                style = Stroke(width = strokeWidthPx, cap = StrokeCap.Round)
             )
-
-            // Motivational text
-            Spacer(modifier = Modifier.height(28.dp))
-
-            HorizontalDivider(
-                thickness = 0.5.dp,
-                color = Color.White.copy(alpha = 0.06f)
-            )
-
-            Spacer(modifier = Modifier.height(20.dp))
-
+        }
+        
+        // Score & Subtitle centered at the bottom of the semi-circle
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(bottom = 6.dp)
+        ) {
             Text(
-                text = "\"${if (trend == "Meningkat") "Keadaan keuangan pada $periodLabel membaik dibanding sebelumnya." else if (trend == "Menurun") "Hati-hati dengan belanja pada $periodLabel agar uangmu tetap sehat." else "Keadaan keuangan pada $periodLabel cenderung stabil."}\"",
-                fontSize = 10.sp,
-                fontStyle = FontStyle.Italic,
-                color = Color.White.copy(alpha = 0.35f),
-                textAlign = TextAlign.Center,
-                lineHeight = 16.sp,
-                modifier = Modifier.fillMaxWidth()
+                text = score.toString(),
+                fontSize = 44.sp,
+                fontWeight = FontWeight.Black,
+                color = if (isDarkMode) Color.White else iOSLabelLight,
+                letterSpacing = (-1.5).sp,
+                lineHeight = 44.sp
+            )
+            Text(
+                text = "SKOR ANDA",
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Black,
+                color = if (isDarkMode) iOSSecondaryLabelDark else iOSSecondaryLabelLight,
+                letterSpacing = 1.sp
             )
         }
     }
 }
 
 @Composable
-private fun PerformaBarItem(
-    label: String,
-    diff: Double,
-    progress: Float,
-    barColor: Color,
-    isDiffPositiveGood: Boolean,
-    currencyCode: String = "IDR",
-    currencyFormat: String = "standard"
+fun FinancialHealthSection(
+    data: StatistikData,
+    isDark: Boolean
 ) {
-    val isPositive = diff >= 0
-    val diffColor = if (isDiffPositiveGood) {
-        if (isPositive) Color(0xFF34D399) else Color(0xFFF87171)
+    val summary = data.summary
+    val monthlyPemasukan = summary?.monthlyPemasukan ?: 0.0
+    val monthlyPengeluaran = summary?.monthlyPengeluaran ?: 0.0
+
+    val savingsRateRaw = if (monthlyPemasukan > 0.0) {
+        ((monthlyPemasukan - monthlyPengeluaran) / monthlyPemasukan) * 100.0
     } else {
-        if (isPositive) Color(0xFFF87171) else Color(0xFF34D399)
+        0.0
     }
-    val arrow = if (isPositive) "↑" else "↓"
-    val formattedDiff = formatCurrency(Math.abs(diff), currencyCode, currencyFormat)
+    
+    var healthScore = Math.max(0.0, Math.min(100.0, Math.round(savingsRateRaw).toDouble())).toInt()
+    if (monthlyPengeluaran > monthlyPemasukan && monthlyPemasukan == 0.0) {
+        healthScore = 0
+    }
 
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = label,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White.copy(alpha = 0.5f)
-            )
-            Text(
-                text = "$arrow $formattedDiff",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Black,
-                color = diffColor
-            )
-        }
+    val (healthStatus, healthColor, healthDesc) = when {
+        healthScore >= 20 -> Triple(
+            "Sangat Sehat",
+            Color(0xFF10B981), // Emerald-500
+            "Luar biasa! Anda berhasil menabung setidaknya 20% dari total pendapatan bulan ini."
+        )
+        healthScore >= 5 -> Triple(
+            "Cukup",
+            Color(0xFFFBBF24), // Amber-500
+            "Keuangan Anda stabil, namun masih bisa dioptimalkan untuk menabung lebih banyak."
+        )
+        else -> Triple(
+            "Kritis",
+            Color(0xFFF43F5E), // Rose-500
+            "Waspada! Pengeluaran Anda hampir atau sudah melebihi pendapatan. Segera evaluasi budget Anda."
+        )
+    }
 
-        Spacer(modifier = Modifier.height(8.dp))
-
-        LinearProgressIndicator(
-            progress = { progress },
+    Card(
+        shape = RoundedCornerShape(32.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isDark) iOSGroupedBackgroundDark else Color.White
+        ),
+        border = BorderStroke(1.dp, if (isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.05f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(8.dp)
-                .clip(CircleShape),
-            color = barColor,
-            trackColor = Color.White.copy(alpha = 0.05f),
-        )
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Header row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(healthColor, CircleShape)
+                    )
+                    Text(
+                        text = "KESEHATAN FINANSIAL",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Black,
+                        color = if (isDark) iOSSecondaryLabelDark else iOSSecondaryLabelLight,
+                        letterSpacing = 1.5.sp
+                    )
+                }
+                
+                Icon(
+                    imageVector = Icons.Default.MedicalServices,
+                    contentDescription = null,
+                    tint = if (isDark) iOSSecondaryLabelDark.copy(alpha = 0.4f) else iOSSecondaryLabelLight.copy(alpha = 0.4f),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Gauge chart
+            FinancialHealthGauge(
+                score = healthScore,
+                activeColor = healthColor,
+                isDark = isDark
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+            
+            HorizontalDivider(
+                thickness = 1.dp,
+                color = if (isDark) Color.White.copy(alpha = 0.06f) else Color.Black.copy(alpha = 0.06f)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Status indicator
+            Text(
+                text = healthStatus,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Black,
+                color = healthColor,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Description text
+            Text(
+                text = healthDesc,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = if (isDark) iOSSecondaryLabelDark else iOSSecondaryLabelLight,
+                textAlign = TextAlign.Center,
+                lineHeight = 18.sp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp)
+            )
+        }
     }
 }
 
@@ -2697,12 +2755,23 @@ fun CashflowTrendChart(
 
                     if (selectedIndex >= 0 && selectedIndex < labels.size) {
                         val x = selectedIndex * spacing
-                        drawLine(
-                            color = textSecondary.copy(alpha = 0.25f),
-                            start = androidx.compose.ui.geometry.Offset(x, 0f),
-                            end = androidx.compose.ui.geometry.Offset(x, size.height),
-                            strokeWidth = 1.dp.toPx(),
-                            pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10f, 10f))
+                        val pillWidth = 28.dp.toPx()
+                        
+                        // 1. Draw Translucent Fill
+                        drawRoundRect(
+                            color = StitchPrimary.copy(alpha = 0.12f),
+                            topLeft = androidx.compose.ui.geometry.Offset(x - pillWidth / 2f, 0f),
+                            size = androidx.compose.ui.geometry.Size(pillWidth, size.height),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(12.dp.toPx(), 12.dp.toPx())
+                        )
+                        
+                        // 2. Draw Subtle Border Outline
+                        drawRoundRect(
+                            color = StitchPrimary.copy(alpha = 0.25f),
+                            topLeft = androidx.compose.ui.geometry.Offset(x - pillWidth / 2f, 0f),
+                            size = androidx.compose.ui.geometry.Size(pillWidth, size.height),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(12.dp.toPx(), 12.dp.toPx()),
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
                         )
                     }
 

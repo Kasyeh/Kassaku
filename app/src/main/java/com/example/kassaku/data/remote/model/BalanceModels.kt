@@ -34,9 +34,3 @@ data class TargetPengeluaranData(
     @SerializedName("pengeluaran_bulan_ini") val pengeluaranBulanIni: String,
     @SerializedName("is_over_budget") val isOverBudget: Boolean
 )
-
-data class ResetSaldoResponse(
-    @SerializedName("success") val success: Boolean,
-    @SerializedName("message") val message: String,
-    @SerializedName("data") val data: BalanceData?
-)
